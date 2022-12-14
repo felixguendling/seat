@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(seat)
+include(cmake/pkg.cmake)
+add_executable(seat src/main.cc)
+target_link_libraries(seat utl)

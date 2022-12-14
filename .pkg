@@ -1,0 +1,4 @@
+[utl]
+  url=git@github.com:motis-project/utl.git
+  branch=master
+  commit=dcfa07fed2ffe5e68248524bd29c58cca90a96d1
