@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(seat)
 include(cmake/pkg.cmake)
-add_executable(seat src/main.cc)
+file(GLOB_RECURSE seat-src-files src/*.cc)
+add_executable(seat ${seat-src-files})
+target_include_directories(seat PRIVATE include)
 target_link_libraries(seat utl cista ortools::ortools)
