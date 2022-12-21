@@ -1,3 +1,4 @@
+
 #include <algorithm>
 #include <array>
 #include <iostream>
@@ -8,11 +9,18 @@
 #include <set>
 #include <vector>
 
+#include "fmt/format.h"
+#include "fmt/ostream.h"
+
+#include "ortools/linear_solver/linear_solver.h"
+
 #include "cista/containers/matrix.h"
 
 #include "utl/enumerate.h"
 #include "utl/get_or_create.h"
 #include "utl/zip.h"
+
+namespace gor = operations_research;
 
 enum class properties { kWindow, kSilent, kTable, kBig, kNProperties };
 
@@ -163,6 +171,55 @@ int main() {
     --nodes_[sink_node_id].e_;
   }
 
+  cista::raw::matrix<capacity_t> cap_matrix;
+  cap_matrix.resize(nodes_.size(), nodes_.size());
+  cap_matrix.reset(0U);
+  for (auto const& [from_node_id, out_edges] : utl::enumerate(out_edges_)) {
+    for (auto const& e : out_edges) {
+      cap_matrix[from_node_id][e.target_] = e.capacity_;
+    }
+  }
+
+  auto solver =
+      std::unique_ptr<gor::MPSolver>{gor::MPSolver::CreateSolver("SCIP")};
+  if (!solver) {
+    LOG(WARNING) << "SCIP solver unavailable.";
+    return -1;
+  }
+
+  std::map<std::pair<node_id_t, node_id_t>, gor::MPVariable*> flows;
+  auto const get_flow_variable = [&](node_id_t const from, node_id_t const to) {
+    return utl::get_or_create(flows, std::pair{from, to}, [&]() {
+      return solver->MakeIntVar(
+          0.0, cap_matrix[from][to],
+          fmt::format("flow_{}_to_{}", nodes_[from], nodes_[to]));
+    });
+  };
+
+  for (auto node_id = 0U; node_id != nodes_.size(); ++node_id) {
+    auto const flow_conservation =
+        solver->MakeRowConstraint(nodes_[node_id].e_, nodes_[node_id].e_);
+
+    for (auto i = 0U; i != out_edges_[node_id].size(); ++i) {
+      auto const to = out_edges_[node_id][i].target_;
+      flow_conservation->SetCoefficient(get_flow_variable(node_id, to), 1);
+    }
+
+    for (auto i = 0U; i != in_edges_[node_id].size(); ++i) {
+      auto const from = in_edges_[node_id][i].target_;
+      flow_conservation->SetCoefficient(get_flow_variable(from, node_id), -1);
+    }
+  }
+
+  auto const result_status = solver->Solve();
+  std::cout << "result status: " << result_status << "\n";
+  std::cout << "values:\n";
+  for (auto const& [k, v] : flows) {
+    auto const [from, to] = k;
+    std::cout << "  " << nodes_[from] << " -> " << nodes_[to] << ": "
+              << v->solution_value() << "\n";
+  }
+
   std::cout << "digraph R {\n";
   std::cout << "  node [shape=record]\n";
   std::cout << "  rankdir = LR;\n";
@@ -215,86 +272,36 @@ int main() {
     for (auto const& e : edges) {
       auto const& to = nodes_[e.target_];
       std::cout << "  " << from << " -> " << to;
-      if (e.capacity_ != std::numeric_limits<capacity_t>::max()) {
-        std::cout << " [label=\"" << e.capacity_ << "\"]";
+
+      std::cout << " [label=\"";
+      auto const flow = flows.find(std::pair{node_id, e.target_});
+      if (flow != end(flows)) {
+        std::cout << flow->second->solution_value();
+      } else {
+        std::cout << "-";
       }
-      std::cout << ";\n";
+
+      if (e.capacity_ != std::numeric_limits<capacity_t>::max()) {
+        std::cout << " / " << e.capacity_;
+      }
+      std::cout << "\"];\n";
     }
   }
 
-  for (auto const& [node_id, edges] : utl::enumerate(in_edges_)) {
-    auto const& from = nodes_[node_id];
-    for (auto const& e : edges) {
-      auto const& to = nodes_[e.target_];
-      std::cout << "  " << from << " -> " << to << " [";
-      if (e.capacity_ != std::numeric_limits<capacity_t>::max()) {
-        std::cout << "label=\"" << e.capacity_ << "\" ";
+  constexpr auto const print_in_edges = false;
+  if (print_in_edges) {
+    for (auto const& [node_id, edges] : utl::enumerate(in_edges_)) {
+      auto const& from = nodes_[node_id];
+      for (auto const& e : edges) {
+        auto const& to = nodes_[e.target_];
+        std::cout << "  " << from << " -> " << to << " [";
+        if (e.capacity_ != std::numeric_limits<capacity_t>::max()) {
+          std::cout << "label=\"" << e.capacity_ << "\" ";
+        }
+        std::cout << "style=dashed];\n";
       }
-      std::cout << "style=dashed];\n";
     }
   }
 
   std::cout << "}\n\n\n";
-
-  std::cout << "set N := 0.." << nodes_.size() << ";\n";
-  std::cout << "set CAP within {N cross N};\n";
-
-  cista::raw::matrix<capacity_t> cap_matrix;
-  cap_matrix.resize(nodes_.size(), nodes_.size());
-  cap_matrix.reset(0U);
-  for (auto const& [from_node_id, out_edges] : utl::enumerate(out_edges_)) {
-    for (auto const& e : out_edges) {
-      cap_matrix[from_node_id][e.target_] = e.capacity_;
-    }
-  }
-  std::cout << "var f {(i,j) in {N cross N}} integer;\n\n";
-
-  std::cout << "\nMinimize\n";
-  std::cout << "  obj: 0\n";
-  std::cout << "Subject To\n";
-
-  std::set<std::pair<node_id_t, node_id_t>> used;
-  for (auto node_id = 0U; node_id != nodes_.size(); ++node_id) {
-    std::cout << "  flow_conservation_" << nodes_[node_id] << ": ";
-
-    for (auto i = 0U; i != out_edges_[node_id].size(); ++i) {
-      auto const target = out_edges_[node_id][i].target_;
-      std::cout << "f_" << nodes_[node_id] << "_" << nodes_[target];
-      if (i != out_edges_[node_id].size() - 1U) {
-        std::cout << " + ";
-      }
-      used.emplace(node_id, target);
-    }
-
-    for (auto i = 0U; i != in_edges_[node_id].size(); ++i) {
-      auto const target = in_edges_[node_id][i].target_;
-      std::cout << " - f_" << nodes_[target] << "_" << nodes_[node_id];
-      used.emplace(target, node_id);
-    }
-
-    std::cout << " = " << nodes_[node_id].e_;
-    std::cout << "\n";
-  }
-
-  std::cout << "Bounds\n";
-  for (auto i = 0U; i != cap_matrix.n_rows_; ++i) {
-    for (auto j = 0U; j != cap_matrix.n_columns_; ++j) {
-      if (cap_matrix[i][j] != 0U &&
-          cap_matrix[i][j] != std::numeric_limits<capacity_t>::max()) {
-        std::cout << "  f_" << nodes_[i] << "_" << nodes_[j]
-                  << " <= " << cap_matrix[i][j] << "\n";
-        used.emplace(i, j);
-      }
-    }
-  }
-  for (auto const& [i, j] : used) {
-    std::cout << "  f_" << nodes_[i] << "_" << nodes_[j] << " >= 0"
-              << "\n";
-  }
-
-  std::cout << "General\n";
-  for (auto const& [i, j] : used) {
-    std::cout << "  f_" << nodes_[i] << "_" << nodes_[j] << "\n";
-  }
-  std::cout << "End";
 }
