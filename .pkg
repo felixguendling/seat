@@ -2,3 +2,11 @@
   url=git@github.com:motis-project/utl.git
   branch=master
   commit=dcfa07fed2ffe5e68248524bd29c58cca90a96d1
+[cista]
+  url=git@github.com:felixguendling/cista.git
+  branch=nigiri
+  commit=47633d28d97b50bb128de9d0cc4c879031e5bb1c
+[ortools]
+  url=git@github.com:google/or-tools.git
+  branch=stable
+  commit=92eab40155d5566039c92662632f196174f8da47
