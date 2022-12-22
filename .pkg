@@ -10,3 +10,7 @@
   url=git@github.com:google/or-tools.git
   branch=stable
   commit=92eab40155d5566039c92662632f196174f8da47
+[googletest]
+  url=git@github.com:motis-project/googletest.git
+  branch=master
+  commit=34a46558609e05865c197f0260ab36daa7cbbb6e

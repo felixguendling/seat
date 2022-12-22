@@ -11,6 +11,8 @@
 
 namespace seat {
 
+struct solver;
+
 enum class node_type { kSegment, kSource, kSink };
 
 struct flow_graph {
@@ -23,8 +25,9 @@ struct flow_graph {
   };
 
   struct edge {
-    node_id_t target_;
-    capacity_t capacity_;
+    node_id_t target_{0U};
+    capacity_t capacity_{0U};
+    capacity_t flow_{0U};
   };
 
   flow_graph(std::map<reservation, std::uint32_t> const& number_of_seats,
@@ -36,9 +39,9 @@ struct flow_graph {
   void to_graphviz(std::ostream& out, bool print_in_edges);
   std::string lp_str() const;
 
-private:
   auto get_create_node_fn(station_id_t, reservation booking_r, bool is_source);
-  capacity_t get_capacity(node_id_t from, node_id_t to) const;
+  capacity_t get_capacity(node_id_t from, node_id_t to);
+  std::optional<edge*> get_edge(node_id_t from, node_id_t to);
 
   std::vector<node> nodes_;
   std::vector<std::vector<edge>> out_edges_;
@@ -46,10 +49,7 @@ private:
   std::vector<std::map<reservation, node_id_t>> station_nodes_;
   std::map<std::pair<station_id_t, reservation>, node_id_t> source_nodes_,
       sink_nodes_;
-  struct solver;
-  struct sat_solver;
   std::unique_ptr<solver> solver_;
-  std::unique_ptr<sat_solver> sat_solver_;
 };
 
 }  // namespace seat
