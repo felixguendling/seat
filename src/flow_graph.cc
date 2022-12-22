@@ -19,7 +19,7 @@ struct flow_graph::solver {
     utl::verify(solver_ != nullptr, "SCIP solver unavailable");
   }
 
-  gor::MPVariable* get_flow_variable(node_id_t const from, node_id_t const to) {
+  gor::MPVariable* get_flow(node_id_t const from, node_id_t const to) {
     return utl::get_or_create(flows_, std::pair{from, to}, [&]() {
       auto const capacity = graph_.get_capacity(from, to);
       return solver_->MakeIntVar(
@@ -38,12 +38,12 @@ struct flow_graph::solver {
 
       for (auto i = 0U; i != graph_.out_edges_[node_id].size(); ++i) {
         auto const to = graph_.out_edges_[node_id][i].target_;
-        fcc->SetCoefficient(get_flow_variable(node_id, to), 1);
+        fcc->SetCoefficient(get_flow(node_id, to), 1);
       }
 
       for (auto i = 0U; i != graph_.in_edges_[node_id].size(); ++i) {
         auto const from = graph_.in_edges_[node_id][i].target_;
-        fcc->SetCoefficient(get_flow_variable(from, node_id), -1);
+        fcc->SetCoefficient(get_flow(from, node_id), -1);
       }
     }
   }
@@ -65,18 +65,13 @@ struct flow_graph::solver {
   }
 
   void add_flow(node_id_t const from, node_id_t const to) {
-    auto const flow = get_flow_variable(from, to);
+    auto const flow = get_flow(from, to);
     node_fccs_[from]->SetCoefficient(flow, 1);
     node_fccs_[to]->SetCoefficient(flow, -1);
   }
 
   bool solve() {
     result_ = solver_->Solve();
-
-    std::string str;
-    solver_->ExportModelAsLpFormat(false, &str);
-    std::cout << str << "\n";
-
     return feasible();
   }
 

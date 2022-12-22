@@ -1,7 +1,7 @@
 [utl]
   url=git@github.com:motis-project/utl.git
   branch=master
-  commit=dcfa07fed2ffe5e68248524bd29c58cca90a96d1
+  commit=0be21a91d96f27f2de4583eb5badfd1c873e3f6c
 [cista]
   url=git@github.com:felixguendling/cista.git
   branch=nigiri
