@@ -45,17 +45,23 @@ int main() {
     std::cout << "adding booking: #" << ++i << " (" << b;
     UTL_START_TIMING(add_booking);
     g.add_booking(b);
-    auto const feasible = g.solve();
-    UTL_STOP_TIMING(add_booking);
-    auto const timing = UTL_GET_TIMING_MS(add_booking);
-    std::cout << ") -> " << (feasible ? "good" : "bad") << " [" << timing
-              << "ms]\n";
-    timings << i << " " << timing << "\n";
-    if (!feasible) {
+    try {
+      auto const feasible = g.solve();
+      UTL_STOP_TIMING(add_booking);
+      auto const timing = UTL_GET_TIMING_MS(add_booking);
+      std::cout << ") -> " << (feasible ? "good" : "bad") << " [" << timing
+                << "ms]\n";
+      timings << i << " " << timing << "\n";
+      if (!feasible) {
+        break;
+      }
+      ss.str("");
+      g.to_graphviz(ss, false);
+    } catch (std::exception const& e) {
+      std::cout << "ABORT: " << e.what() << "\n";
       break;
     }
-    ss.str("");
-    g.to_graphviz(ss, false);
   }
   std::ofstream{"seat_flow_graph.dot"} << ss.str();
+  std::ofstream{"seat_flow.lp"} << g.lp_str();
 }

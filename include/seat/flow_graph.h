@@ -34,10 +34,10 @@ struct flow_graph {
   bool solve();
   void add_booking(booking const&);
   void to_graphviz(std::ostream& out, bool print_in_edges);
+  std::string lp_str() const;
 
 private:
-  auto get_create_node_fn(station_id_t const s, reservation const booking_r,
-                          bool const is_sourc);
+  auto get_create_node_fn(station_id_t, reservation booking_r, bool is_source);
   capacity_t get_capacity(node_id_t from, node_id_t to) const;
 
   std::vector<node> nodes_;
@@ -47,7 +47,9 @@ private:
   std::map<std::pair<station_id_t, reservation>, node_id_t> source_nodes_,
       sink_nodes_;
   struct solver;
+  struct sat_solver;
   std::unique_ptr<solver> solver_;
+  std::unique_ptr<sat_solver> sat_solver_;
 };
 
 }  // namespace seat

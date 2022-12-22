@@ -6,27 +6,37 @@
 
 #include "utl/enumerate.h"
 #include "utl/get_or_create.h"
+#include "utl/timing.h"
 #include "utl/verify.h"
 
 #include "ortools/linear_solver/linear_solver.h"
 
+#include "ortools/base/logging.h"
+#include "ortools/sat/cp_model.h"
+#include "ortools/sat/cp_model.pb.h"
+#include "ortools/sat/cp_model_solver.h"
+#include "ortools/util/sorted_interval_list.h"
+
 namespace gor = operations_research;
+namespace sat = gor::sat;
 
 namespace seat {
 
+constexpr auto const solver_name = "SCIP";
+
 struct flow_graph::solver {
   explicit solver(flow_graph& graph) : graph_{graph} {
-    utl::verify(solver_ != nullptr, "SCIP solver unavailable");
+    utl::verify(solver_ != nullptr, "{} solver unavailable", solver_name);
   }
 
   gor::MPVariable* get_flow(node_id_t const from, node_id_t const to) {
     return utl::get_or_create(flows_, std::pair{from, to}, [&]() {
       auto const capacity = graph_.get_capacity(from, to);
+      auto const adjusted = capacity == std::numeric_limits<capacity_t>::max()
+                                ? solver_->infinity()
+                                : capacity;
       return solver_->MakeIntVar(
-          0.0,
-          capacity == std::numeric_limits<capacity_t>::max()
-              ? solver_->infinity()
-              : capacity,
+          0.0, adjusted,
           fmt::format("flow_{}_to_{}", graph_.nodes_[from], graph_.nodes_[to]));
     });
   }
@@ -70,9 +80,34 @@ struct flow_graph::solver {
     node_fccs_[to]->SetCoefficient(flow, -1);
   }
 
+  void set_capacity(node_id_t const from, node_id_t const to,
+                    capacity_t const c) {
+    flows_.at(std::pair{from, to})->SetBounds(0.0, c);
+  }
+
   bool solve() {
+    //    for (auto const& [from_to, var] : flows_) {
+    //      auto const [from, to] = from_to;
+    //      auto const from_node = graph_.nodes_[from];
+    //      auto const to_node = graph_.nodes_[to];
+    //      if (from_node.type_ == node_type::kSource) {
+    //        var->SetInteger(true);
+    //        var->SetUB(from_node.e_);
+    //      } else if (to_node.type_ == node_type::kSink) {
+    //        var->SetInteger(true);
+    //        var->SetUB(-to_node.e_);
+    //      }
+    //    }
+
     result_ = solver_->Solve();
+
     return feasible();
+  }
+
+  std::string lp_str() const {
+    std::string s;
+    solver_->ExportModelAsLpFormat(false, &s);
+    return s;
   }
 
   bool feasible() {
@@ -81,10 +116,102 @@ struct flow_graph::solver {
   }
 
   flow_graph& graph_;
-  std::unique_ptr<gor::MPSolver> solver_{gor::MPSolver::CreateSolver("SCIP")};
+  std::unique_ptr<gor::MPSolver> solver_{
+      gor::MPSolver::CreateSolver(solver_name)};
   std::map<std::pair<node_id_t, node_id_t>, gor::MPVariable*> flows_;
   std::vector<gor::MPConstraint*> node_fccs_;
   gor::MPSolver::ResultStatus result_{gor::MPSolver::NOT_SOLVED};
+};
+
+struct flow_graph::sat_solver {
+  explicit sat_solver(flow_graph& g) : graph_{g} {}
+
+  void clear() {
+    builder_ = {};
+
+    node_fccs_.clear();
+    node_fccs_.resize(graph_.nodes_.size());
+
+    flows_.clear();
+
+    response_.Clear();
+  }
+
+  void build() {
+    for (auto node_id = 0U; node_id != graph_.nodes_.size(); ++node_id) {
+      auto& [l, r] = node_fccs_[node_id];
+
+      r = graph_.nodes_[node_id].e_;
+
+      for (auto i = 0U; i != graph_.out_edges_[node_id].size(); ++i) {
+        auto const to = graph_.out_edges_[node_id][i].target_;
+        l += get_flow(node_id, to);
+      }
+
+      for (auto i = 0U; i != graph_.in_edges_[node_id].size(); ++i) {
+        auto const from = graph_.in_edges_[node_id][i].target_;
+        l -= get_flow(from, node_id);
+      }
+    }
+  }
+
+  sat::IntVar get_flow(node_id_t const from, node_id_t const to) {
+    return utl::get_or_create(flows_, std::pair{from, to}, [&]() {
+      auto capacity = graph_.get_capacity(from, to);
+
+      auto const from_node = graph_.nodes_[from];
+      auto const to_node = graph_.nodes_[to];
+      if (from_node.type_ == node_type::kSource) {
+        capacity = from_node.e_;
+      } else if (to_node.type_ == node_type::kSink) {
+        capacity = -to_node.e_;
+      }
+
+      auto var = builder_.NewIntVar(gor::Domain{0U, capacity});
+      if (auto const it = flow_hint_.find(std::pair{from, to});
+          it != end(flow_hint_)) {
+        builder_.AddHint(var, it->second);
+      }
+
+      return var;
+    });
+  }
+
+  bool solve() {
+    clear();
+    build();
+    for (auto const& [l, r] : node_fccs_) {
+      builder_.AddEquality(l, r);
+    }
+
+    //    builder_.Build().PrintDebugString();
+
+    response_ = sat::Solve(builder_.Build());
+
+    for (auto const& [from_to, var] : flows_) {
+      flow_hint_[from_to] = sat::SolutionIntegerValue(response_, var);
+    }
+
+    return response_.status() == sat::OPTIMAL ||
+           response_.status() == sat::FEASIBLE;
+  }
+
+  std::uint32_t get_flow_value(std::uint32_t const from,
+                               std::uint32_t const to) const {
+    auto const it = flows_.find(std::pair{from, to});
+    if (it != end(flows_)) {
+      return sat::SolutionIntegerValue(response_, it->second);
+    } else {
+      return 0U;
+    }
+  }
+
+  sat::CpModelBuilder builder_;
+  sat::CpSolverResponse response_;
+  std::map<std::pair<node_id_t, node_id_t>, sat::IntVar> flows_;
+  std::map<std::pair<node_id_t, node_id_t>, capacity_t> flow_hint_;
+  std::vector<std::pair<sat::LinearExpr, sat::LinearExpr>> node_fccs_;
+  flow_graph& graph_;
 };
 
 std::ostream& operator<<(std::ostream& out, flow_graph::node const& n) {
@@ -248,6 +375,12 @@ void flow_graph::to_graphviz(std::ostream& out, bool const print_in_edges) {
         out << " / " << e.capacity_;
       }
       out << "\"];\n";
+
+      if (sat_solver_ != nullptr) {
+        out << "  " << from << " -> " << to;
+        out << " [fontcolor=blue label=\""
+            << sat_solver_->get_flow_value(node_id, e.target_) << "\"];\n";
+      }
     }
   }
 
@@ -268,6 +401,27 @@ void flow_graph::to_graphviz(std::ostream& out, bool const print_in_edges) {
   out << "}\n\n\n";
 }
 
-bool flow_graph::solve() { return solver_->solve(); }
+bool flow_graph::solve() {
+  if (sat_solver_ == nullptr) {
+    sat_solver_ = std::make_unique<sat_solver>(*this);
+  }
+
+  UTL_START_TIMING(sat_t);
+  auto const x = sat_solver_->solve();
+  UTL_STOP_TIMING(sat_t);
+
+  UTL_START_TIMING(milp_t);
+  auto const y = solver_->solve();
+  UTL_STOP_TIMING(milp_t);
+
+  std::cout << "  sat_timing=" << UTL_GET_TIMING_MS(sat_t) << "\n";
+  std::cout << "  milp_timing=" << UTL_GET_TIMING_MS(milp_t) << "\n";
+
+  utl::verify(x == y, "sat_solver={}, milp_solver={}", x, y);
+
+  return x;
+}
+
+std::string flow_graph::lp_str() const { return solver_->lp_str(); }
 
 }  // namespace seat
