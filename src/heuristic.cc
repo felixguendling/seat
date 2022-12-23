@@ -86,13 +86,14 @@ capacity_t check_path(flow_graph& g, flow_graph::edge& first_edge,
 }
 
 bool heuristic(flow_graph& g, booking const& b) {
-  auto const src_node_id = g.source_nodes_.at(std::pair{b.from_, b.r_});
-  auto const sink_node_id = g.sink_nodes_.at(std::pair{b.to_, b.r_});
+  auto const src_node_id =
+      g.source_nodes_.at(std::pair{b.interval_.from_, b.r_});
+  auto const sink_node_id = g.sink_nodes_.at(std::pair{b.interval_.to_, b.r_});
   auto max_min_remaining_capacity = 0U;
   flow_graph::edge* best_edge = nullptr;
   for (auto& first_edge : g.out_edges_[src_node_id]) {
     auto const min_remaining_capacity =
-        check_path(g, first_edge, b.to_, sink_node_id);
+        check_path(g, first_edge, b.interval_.to_, sink_node_id);
     if (min_remaining_capacity > max_min_remaining_capacity) {
       max_min_remaining_capacity = min_remaining_capacity;
       best_edge = &first_edge;
@@ -100,7 +101,7 @@ bool heuristic(flow_graph& g, booking const& b) {
   }
 
   if (max_min_remaining_capacity != 0U) {
-    increment_flow(g, *best_edge, b.to_, sink_node_id);
+    increment_flow(g, *best_edge, b.interval_.to_, sink_node_id);
   }
 
   return max_min_remaining_capacity != 0U;

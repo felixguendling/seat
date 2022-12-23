@@ -102,11 +102,11 @@ std::optional<flow_graph::edge*> flow_graph::get_edge(node_id_t const from,
 
 void flow_graph::add_booking(booking const& b) {
   auto const source_node_id =
-      utl::get_or_create(source_nodes_, std::pair{b.from_, b.r_},
-                         get_create_node_fn(b.from_, b.r_, true));
+      utl::get_or_create(source_nodes_, std::pair{b.interval_.from_, b.r_},
+                         get_create_node_fn(b.interval_.from_, b.r_, true));
   auto const sink_node_id =
-      utl::get_or_create(sink_nodes_, std::pair{b.to_, b.r_},
-                         get_create_node_fn(b.to_, b.r_, false));
+      utl::get_or_create(sink_nodes_, std::pair{b.interval_.to_, b.r_},
+                         get_create_node_fn(b.interval_.to_, b.r_, false));
 
   solver_->set_excess(source_node_id, ++nodes_[source_node_id].e_);
   solver_->set_excess(sink_node_id, --nodes_[sink_node_id].e_);

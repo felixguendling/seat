@@ -88,11 +88,12 @@ booking generate_random_booking(reservation const r,
     }
   }
   auto const from_p = to_01(lehmer64());
-  b.from_ = static_cast<std::uint32_t>(
+  b.interval_.from_ = static_cast<std::uint32_t>(
       std::floor(number_of_segments * (from_p == 1.0 ? 0.5 : from_p)));
-  b.to_ = static_cast<std::uint32_t>(
-      b.from_ + 1U +
-      std::round((number_of_segments - b.from_ - 1) * to_01(lehmer64())));
+  b.interval_.to_ = static_cast<std::uint32_t>(
+      b.interval_.from_ + 1U +
+      std::round((number_of_segments - b.interval_.from_ - 1) *
+                 to_01(lehmer64())));
   return b;
 }
 

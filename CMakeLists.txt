@@ -6,6 +6,7 @@ include(cmake/pkg.cmake)
 file(GLOB_RECURSE seat-src-files src/*.cc)
 add_library(seatl ${seat-src-files})
 target_link_libraries(seatl PUBLIC utl cista ortools::ortools)
+target_compile_features(seatl PUBLIC cxx_std_20)
 target_include_directories(seatl PUBLIC include)
 
 file(GLOB_RECURSE seat-exe-files exe/*.cc)

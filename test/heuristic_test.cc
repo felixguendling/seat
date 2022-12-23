@@ -16,16 +16,14 @@ TEST(heuristic, impossible) {
 
   for (auto i = 0U; i != 4; ++i) {
     auto const b = booking{.r_ = {wish::kAny, wish::kAny, wish::kNo, wish::kNo},
-                           .from_ = 0U,
-                           .to_ = 1U};
+                           .interval_ = {0U, 1U}};
     g.add_booking(b);
     EXPECT_TRUE(heuristic(g, b));
   }
 
   for (auto i = 0U; i != 2; ++i) {
     auto const b = booking{.r_ = {wish::kYes, wish::kYes, wish::kNo, wish::kNo},
-                           .from_ = 0U,
-                           .to_ = 1U};
+                           .interval_ = {0U, 1U}};
     g.add_booking(b);
     if (i == 0U) {
       EXPECT_TRUE(heuristic(g, b));

@@ -6,6 +6,7 @@
 
 #include "seat/flow_graph.h"
 #include "seat/heuristic.h"
+#include "seat/nogo_cache.h"
 #include "seat/random_booking.h"
 
 using namespace seat;
@@ -75,33 +76,48 @@ int main() {
   // gnuplot -p -e "plot 'timings.dat' with points pt 2"
   auto timings = std::ofstream{"timings.dat"};
   flow_graph g{number_of_seats, number_of_segments};
+  nogo_cache nogo;
 
-  auto failed = 200;
+  auto failed = 500;
   auto success = 0U;
+  auto nogo_count = 0U;
   auto i = 0U;
   auto solver_solved = 0U;
   auto heuristic_solved = 0U;
+  std::vector<std::uint64_t> timings_vec;
   while (failed >= 0) {
     auto const b = generate_random_booking(
         {wish::kAny, wish::kAny, wish::kAny, wish::kAny}, number_of_segments);
     std::cout << "adding booking: #" << ++i << " " << b;
     try {
-      UTL_START_TIMING(add_booking);
       g.add_booking(b);
 
-      auto feasible = heuristic(g, b);
+      UTL_START_TIMING(add_booking);
+      auto feasible = !nogo.is_nogo(b);
       if (!feasible) {
-        feasible = g.solve();
-        ++solver_solved;
+        ++nogo_count;
       } else {
-        ++heuristic_solved;
+        feasible = heuristic(g, b);
+        if (!feasible) {
+          feasible = g.solve();
+          ++solver_solved;
+        } else {
+          ++heuristic_solved;
+        }
+
+        if (!feasible) {
+          nogo.add_entry(b);
+        }
       }
       UTL_STOP_TIMING(add_booking);
-      auto const timing = UTL_GET_TIMING_MS(add_booking);
+
+      auto const timing = UTL_GET_TIMING_US(add_booking);
+      timings_vec.emplace_back(timing);
+
       std::cout << " -> " << (feasible ? "good" : "bad") << " [" << timing
-                << "ms, solver=" << solver_solved
+                << "us, solver=" << solver_solved
                 << ", heuristic=" << heuristic_solved << ", failed=" << failed
-                << ", success=" << success << "]\n";
+                << ", success=" << success << ", nogo=" << nogo_count << "]\n";
       timings << i << " " << timing << "\n";
       if (!feasible) {
         --failed;
@@ -115,6 +131,14 @@ int main() {
       break;
     }
   }
+
+  std::uint64_t timing_sum;
+  for (auto const& t : timings_vec) {
+    timing_sum += t;
+  }
+  std::cout << "avg: " << static_cast<double>(timing_sum) / timings_vec.size()
+            << "\n";
+
   std::ofstream{"seat_flow_graph.dot"} << ss.str();
   std::ofstream{"seat_flow.lp"} << g.lp_str();
 }
