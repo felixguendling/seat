@@ -5,7 +5,8 @@
 namespace seat {
 
 std::ostream& operator<<(std::ostream& out, interval const& i) {
-  return out << "[" << i.from_ << ", " << i.to_ << ")";
+  return out << "[" << static_cast<int>(i.from_) << ", "
+             << static_cast<int>(i.to_) << ")";
 }
 
 }  // namespace seat

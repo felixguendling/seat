@@ -19,6 +19,13 @@ bool interval::contains(interval const& o) const {
   return o.from_ >= from_ && o.to_ <= to_;
 }
 
+bool interval::overlaps(interval const& o) const {
+  // 1-2 vs 2-3: 1 < 3 && 2 > 2 => false
+  // 2-3 vs 1-2: 2 < 2 && 3 > 1 => false
+  // 1-3 vs 2-4: 1 < 4 && 3 > 2 => true
+  return from_ < o.to_ && to_ > o.from_;
+}
+
 void nogo_cache::add_entry(booking const& b) {
   auto& r_nogo_intervals = nogo_intervals_[b.r_];
   remove_containing_intervals(b.interval_, r_nogo_intervals);

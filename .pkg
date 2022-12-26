@@ -4,13 +4,13 @@
   commit=0be21a91d96f27f2de4583eb5badfd1c873e3f6c
 [cista]
   url=git@github.com:felixguendling/cista.git
-  branch=nigiri
-  commit=47633d28d97b50bb128de9d0cc4c879031e5bb1c
-[ortools]
-  url=git@github.com:google/or-tools.git
-  branch=stable
-  commit=92eab40155d5566039c92662632f196174f8da47
+  branch=master
+  commit=0f78d0cc2cae1440a2c72bdc1311efbf3a9c753c
 [googletest]
   url=git@github.com:motis-project/googletest.git
   branch=master
   commit=34a46558609e05865c197f0260ab36daa7cbbb6e
+[kissat]
+  url=git@github.com:felixguendling/kissat.git
+  branch=master
+  commit=6282e6a0d8f8792f44b6cfb9ca365738bed980f5
