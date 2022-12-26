@@ -4,7 +4,7 @@
 #include <sstream>
 #include <vector>
 
-#include "kissat.h"
+#include "simp/SimpSolver.h"
 
 #include "utl/enumerate.h"
 #include "utl/raii.h"
@@ -48,61 +48,76 @@ struct interval_graph {
     lit_t lit_;
   };
 
-  interval_graph(std::vector<reservation> seats) : seats_{std::move(seats)} {
-    solver_ = kissat_init();
-    utl::verify(solver_ != nullptr, "kissat init failed");
-  }
+  interval_graph(std::vector<reservation> seats) : seats_{std::move(seats)} {}
 
   void add_booking(booking const& b) {
-    auto const node_id = static_cast<node_id_t>(neighbors_.size());
-
     std::vector<node_id_t> overlap;
     for (auto const& [node_id, interval] : utl::enumerate(interval_)) {
       if (b.interval_.overlaps(interval)) {
         overlap.emplace_back(node_id);
       }
     }
-    auto const& neighbors = neighbors_.emplace_back(std::move(overlap));
-    auto const r = reservation_.emplace_back(b.r_);
+    neighbors_.emplace_back(overlap);
+
+    reservation_.emplace_back(b.r_);
     interval_.emplace_back(b.interval_);
-
-    // Make sure the new booking gets a seat.
-    seat_assignment_lits_.emplace_back();
-    for (auto const& [seat_number, s_r] : utl::enumerate(seats_)) {
-      if (matches(r, s_r)) {
-        auto const lit = create_lit();
-        seat_assignment_lits_.back().emplace_back(
-            assignment{static_cast<seat_number_t>(seat_number), lit});
-        kissat_add(solver_, lit);
-      }
-    }
-    kissat_add(solver_, kFinishClause);
-
-    // Make sure the seat is not occupied in parallel by an overlapping booking.
-    for (auto const& neighbor : neighbors) {
-      auto const& seat_options_a = seat_assignment_lits_[node_id];
-      auto const& seat_options_b = seat_assignment_lits_[neighbor];
-      set_intersection(
-          begin(seat_options_a), end(seat_options_a), begin(seat_options_b),
-          end(seat_options_b),
-          [&](assignment const& a, assignment const& b) {
-            kissat_add(solver_, -a.lit_);
-            kissat_add(solver_, -b.lit_);
-            kissat_add(solver_, kFinishClause);
-          },
-          [](assignment const& a, assignment const& b) {
-            return a.seat_ < b.seat_;
-          });
-    }
   }
 
-  bool solve() { return kissat_solve(solver_) == 10; }
+  bool solve() {
+    auto solver = Glucose::SimpSolver{};
+    utl::verify(solver != nullptr, "kissat init failed");
+    UTL_FINALLY([&]() { kissat_release(solver); });
 
-  lit_t create_lit() { return next_lit_++; }
+    auto get_lit = [next = lit_t{1}]() mutable { return next++; };
 
-  lit_t next_lit_;
-  std::vector<std::vector<assignment>> seat_assignment_lits_;
-  kissat* solver_;
+    // Every customer >=1 seat.
+    std::vector<std::vector<assignment>> seat_assignment_lits;
+    for (auto const& r : reservation_) {
+      seat_assignment_lits.emplace_back();
+      for (auto const& [seat_number, s_r] : utl::enumerate(seats_)) {
+        if (matches(r, s_r)) {
+          auto const lit = get_lit();
+          seat_assignment_lits.back().emplace_back(
+              assignment{static_cast<seat_number_t>(seat_number), lit});
+          kissat_add(solver, lit);
+        }
+      }
+      kissat_add(solver, kFinishClause);
+    }
+
+    // Two overlapping bookings are not on the same seat.
+    std::set<std::pair<node_id_t, node_id_t>> done;
+    for (auto const& [node_id, neighbors] : utl::enumerate(neighbors_)) {
+      for (auto const& neighbor : neighbors) {
+        auto const sorted =
+            std::pair{std::min(static_cast<node_id_t>(node_id), neighbor),
+                      std::max(static_cast<node_id_t>(node_id), neighbor)};
+        if (auto const it = done.find(sorted); it != end(done)) {
+          continue;
+        }
+        auto const& seat_options_a = seat_assignment_lits[node_id];
+        auto const& seat_options_b = seat_assignment_lits[neighbor];
+        set_intersection(
+            begin(seat_options_a), end(seat_options_a), begin(seat_options_b),
+            end(seat_options_b),
+            [&](assignment const& a, assignment const& b) {
+              kissat_add(solver, -a.lit_);
+              kissat_add(solver, -b.lit_);
+              kissat_add(solver, kFinishClause);
+            },
+            [](assignment const& a, assignment const& b) {
+              return a.seat_ < b.seat_;
+            });
+      }
+    }
+
+    UTL_START_TIMING(solve);
+    auto const sat = kissat_solve(solver) == 10;
+    UTL_STOP_TIMING(solve);
+    std::cout << "solve time: " << UTL_GET_TIMING_MS(solve) << "\n";
+
+    return sat;
+  }
 
   std::vector<reservation> seats_;
   std::vector<reservation> reservation_;
