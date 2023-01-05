@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
 project(seat)
 
+set(BUILD_DEPS ON)
+
 include(cmake/pkg.cmake)
 add_subdirectory(glucose-4.2.1)
 
 file(GLOB_RECURSE seat-src-files src/*.cc)
 add_library(seatl ${seat-src-files})
-target_link_libraries(seatl PUBLIC utl cista glucose)
+target_link_libraries(seatl PUBLIC utl cista glucose kissat ortools::ortools)
 target_compile_features(seatl PUBLIC cxx_std_20)
 target_include_directories(seatl PUBLIC include)
 

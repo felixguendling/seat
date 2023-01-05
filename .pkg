@@ -14,3 +14,7 @@
   url=git@github.com:felixguendling/kissat.git
   branch=master
   commit=6282e6a0d8f8792f44b6cfb9ca365738bed980f5
+[ortools]
+  url=git@github.com:google/or-tools.git
+  branch=stable
+  commit=92eab40155d5566039c92662632f196174f8da47
