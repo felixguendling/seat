@@ -17,6 +17,7 @@
 #include "cista/containers/vecvec.h"
 
 #include "seat/booking.h"
+#include "seat/coloring_ilp.h"
 #include "seat/flow_graph.h"
 #include "seat/heuristic.h"
 #include "seat/nogo_cache.h"
@@ -226,9 +227,7 @@ int main() {
   // gnuplot -p -e "plot 'timings.dat' with points pt 2"
   auto timings = std::ofstream{"timings.dat"};
 
-  auto solvers = std::tuple{flow_graph{number_of_seats, number_of_segments},
-                            interval_graph<kissat_solver>{seats},
-                            interval_graph<glucose_solver>{seats}};
+  auto solver = interval_graph<kissat_solver>{seats};
 
   nogo_cache nogo;
 
@@ -237,29 +236,22 @@ int main() {
   auto nogo_count = 0U;
   auto i = 0U;
   auto solver_solved = 0U;
-  auto heuristic_solved = 0U;
   std::vector<std::uint64_t> timings_vec;
   while (failed >= 0) {
     auto const b = generate_random_booking(
         {wish::kAny, wish::kAny, wish::kAny, wish::kAny}, number_of_segments);
     std::cout << "adding booking: #" << ++i << " " << b << " - ";
     try {
-      std::apply(solvers,
-                 [&](auto&&... solver) { (solver.add_booking(b), ...); });
+      solver.add_booking(b);
 
       UTL_START_TIMING(add_booking);
       auto feasible = !nogo.is_nogo(b);
       if (!feasible) {
         ++nogo_count;
       } else {
-        feasible = false;
-        if (!feasible) {
-          std::array<bool, std::tuple_size_v<decltype(solvers)>> feasible;
-          std::apply(solvers, [&](auto&&... solver) { (solver.solve(), ...); });
-          ++solver_solved;
-        } else {
-          ++heuristic_solved;
-        }
+        solver.reset();
+        feasible = solver.solve();
+        ++solver_solved;
 
         if (!feasible) {
           nogo.add_entry(b);
@@ -271,10 +263,8 @@ int main() {
       timings_vec.emplace_back(timing);
 
       std::cout << " -> " << (feasible ? "good" : "bad") << " [" << timing
-                << "ms, solver=" << solver_solved
-                << ", heuristic=" << heuristic_solved
-                << ", remaining=" << failed << ", success=" << success
-                << ", nogo=" << nogo_count << "]\n";
+                << "ms, solver=" << solver_solved << ", remaining=" << failed
+                << ", success=" << success << ", nogo=" << nogo_count << "]\n";
       timings << i << " " << timing << "\n";
       if (!feasible) {
         --failed;

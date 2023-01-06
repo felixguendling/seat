@@ -13,7 +13,7 @@
 [kissat]
   url=git@github.com:felixguendling/kissat.git
   branch=master
-  commit=6282e6a0d8f8792f44b6cfb9ca365738bed980f5
+  commit=72e2feee2fea4a085845965d0bd63d381f96a336
 [ortools]
   url=git@github.com:google/or-tools.git
   branch=stable

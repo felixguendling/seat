@@ -14,7 +14,7 @@ target_include_directories(seatl PUBLIC include)
 
 file(GLOB_RECURSE seat-exe-files exe/*.cc)
 add_executable(seat ${seat-exe-files})
-target_link_libraries(seat seatl)
+target_link_libraries(seat seatl kissat)
 
 file(GLOB_RECURSE seat-test-files test/*.cc)
 add_executable(seat-test ${seat-test-files})
