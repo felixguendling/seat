@@ -10,10 +10,6 @@
   url=git@github.com:motis-project/googletest.git
   branch=master
   commit=34a46558609e05865c197f0260ab36daa7cbbb6e
-[kissat]
-  url=git@github.com:felixguendling/kissat.git
-  branch=master
-  commit=72e2feee2fea4a085845965d0bd63d381f96a336
 [ortools]
   url=git@github.com:google/or-tools.git
   branch=stable

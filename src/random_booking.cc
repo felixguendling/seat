@@ -46,6 +46,8 @@ static inline uint64_t splitmix64_stateless(uint64_t seed, uint64_t offset) {
 
 std::uint64_t seed = 19;
 
+using __uint128_t = std::uint64_t;
+
 // Credits for fast random number generator:
 // https://lemire.me/blog/2019/03/19/the-fastest-conventional-random-number-generator-that-can-pass-big-crush/
 __uint128_t g_lehmer64_state =
