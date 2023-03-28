@@ -27,6 +27,10 @@ struct solver {
   bool feasible();
   std::string lp_str() const;
   void write_flows() const;
+  void print_sizes() const;
+  void print() const;
+
+  int get_occupied_seats(node_id_t const, node_id_t const) const;
 
 private:
   operations_research::MPConstraint* get_fcc(node_id_t node_id);

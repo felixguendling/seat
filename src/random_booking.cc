@@ -48,8 +48,10 @@ std::uint64_t seed = 19;
 
 using __uint128_t = std::uint64_t;
 
+/*
 // Credits for fast random number generator:
-// https://lemire.me/blog/2019/03/19/the-fastest-conventional-random-number-generator-that-can-pass-big-crush/
+//
+https://lemire.me/blog/2019/03/19/the-fastest-conventional-random-number-generator-that-can-pass-big-crush/
 __uint128_t g_lehmer64_state =
     (((__uint128_t)splitmix64_stateless(seed, 0)) << 64) +
     splitmix64_stateless(seed, 1);
@@ -58,6 +60,7 @@ std::uint64_t lehmer64() {
   g_lehmer64_state *= 0xda942042e4dd58b5;
   return g_lehmer64_state >> 64;
 }
+*/
 
 double to_01(std::uint64_t const i) {
   constexpr uint64_t mask1 = 0x3FF0000000000000ULL;
@@ -69,7 +72,8 @@ double to_01(std::uint64_t const i) {
 }
 
 wish generate_wish() {
-  auto const x = to_01(lehmer64());
+  // auto const x = to_01(lehmer64());
+  auto const x = static_cast<double>(rand() % 10000U) / 10000U;
   if (x >= 0.75) {
     return wish::kYes;
   } else if (x >= 0.5) {
@@ -79,23 +83,35 @@ wish generate_wish() {
   }
 }
 
-booking generate_random_booking(reservation const r,
-                                unsigned const number_of_segments) {
+booking generate_random_booking(
+    std::map<reservation, std::uint32_t> const& seats_by_res,
+    reservation const r, unsigned const number_of_segments) {
   auto b = booking{};
-  for (auto [w_br, w_r] : utl::zip(b.r_, r)) {
-    if (w_r == wish::kAny) {
-      w_br = generate_wish();
-    } else {
-      w_br = w_r;
+  auto reservation_exists = 0U;
+  do {
+    for (auto [w_br, w_r] : utl::zip(b.r_, r)) {
+      if (w_r == wish::kAny) {
+        w_br = generate_wish();
+      } else {
+        w_br = w_r;
+      }
     }
-  }
-  auto const from_p = to_01(lehmer64());
+    for (auto const& [conc_r, seats] : seats_by_res) {
+      if (matches(b.r_, conc_r)) {
+        reservation_exists += seats_by_res.at(conc_r);
+      }
+    }
+  } while (reservation_exists == 0);
+  // auto const from_p = to_01(lehmer64());
+  auto const from_p = static_cast<double>(rand() % 10000U) / 10000U;
   b.interval_.from_ = static_cast<std::uint32_t>(
       std::floor(number_of_segments * (from_p == 1.0 ? 0.5 : from_p)));
+  auto const to_p = static_cast<double>(rand() % 10000U) / 10000U;
   b.interval_.to_ = static_cast<std::uint32_t>(
       b.interval_.from_ + 1U +
       std::round((number_of_segments - b.interval_.from_ - 1) *
-                 to_01(lehmer64())));
+                 // to_01(lehmer64())
+                 to_p));
   return b;
 }
 

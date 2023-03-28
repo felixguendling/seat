@@ -1,13 +1,11 @@
 #include "seat/flow_graph.h"
 
-#include <algorithm>
 #include <limits>
 #include <ostream>
 
 #include "utl/enumerate.h"
 #include "utl/get_or_create.h"
 
-#include "seat/heuristic.h"
 #include "seat/solver.h"
 
 namespace seat {
@@ -15,9 +13,18 @@ namespace seat {
 std::ostream& operator<<(std::ostream& out, flow_graph::node const& n) {
   return out << static_cast<char>('A' + n.station_) << "_" << n.r_
              << (n.type_ == node_type::kSource ? "S"
-                 : n.type_ == node_type::kSink ? "T"
+                 : n.type_ == node_type::kSink ? "TS"
                                                : "");
 }
+
+flow_graph::flow_graph(flow_graph const& copy_me)
+    : nodes_(copy_me.nodes_),
+      out_edges_(copy_me.out_edges_),
+      in_edges_(copy_me.in_edges_),
+      station_nodes_(copy_me.station_nodes_),
+      source_nodes_(copy_me.source_nodes_),
+      sink_nodes_(copy_me.sink_nodes_),
+      solver_(std::make_unique<solver>(*this)) {}
 
 flow_graph::flow_graph(
     std::map<reservation, std::uint32_t> const& number_of_seats,
@@ -99,8 +106,9 @@ std::optional<flow_graph::edge*> flow_graph::get_edge(node_id_t const from,
     return std::make_optional(&(*it));
   }
 }
+void flow_graph::add_booking(const seat::booking& b) { add_booking(b, true); }
 
-void flow_graph::add_booking(booking const& b) {
+void flow_graph::add_booking(booking const& b, bool const insert) {
   auto const source_node_id =
       utl::get_or_create(source_nodes_, std::pair{b.interval_.from_, b.r_},
                          get_create_node_fn(b.interval_.from_, b.r_, true));
@@ -110,9 +118,13 @@ void flow_graph::add_booking(booking const& b) {
 
   solver_->set_excess(source_node_id, ++nodes_[source_node_id].e_);
   solver_->set_excess(sink_node_id, --nodes_[sink_node_id].e_);
+  if (insert) {
+    mcf_bookings_.emplace_back(b);
+  }
 }
 
-void flow_graph::to_graphviz(std::ostream& out, bool const print_in_edges) {
+void flow_graph::to_graphviz(std::ostream& out,
+                             bool const print_in_edges) const {
   out << "digraph R {\n";
   out << "  node [shape=record]\n";
   out << "  rankdir = LR;\n";
@@ -199,7 +211,142 @@ bool flow_graph::solve() {
   }
   return feasible;
 }
+void flow_graph::remove_booking(const seat::booking& b) {
+  remove_booking(b, true);
+}
+
+void flow_graph::remove_booking(booking const& b, bool remove) {
+  auto const source_node_id =
+      utl::get_or_create(source_nodes_, std::pair{b.interval_.from_, b.r_},
+                         get_create_node_fn(b.interval_.from_, b.r_, true));
+  auto const sink_node_id =
+      utl::get_or_create(sink_nodes_, std::pair{b.interval_.to_, b.r_},
+                         get_create_node_fn(b.interval_.to_, b.r_, false));
+
+  solver_->set_excess(source_node_id, --nodes_[source_node_id].e_);
+  solver_->set_excess(sink_node_id, ++nodes_[sink_node_id].e_);
+  auto it = std::find(mcf_bookings_.begin(), mcf_bookings_.end(), b);
+  if (remove) {
+    mcf_bookings_.erase(it);
+  }
+}
 
 std::string flow_graph::lp_str() const { return solver_->lp_str(); }
 
+void flow_graph::print_sizes() const { solver_->print_sizes(); }
+
+void flow_graph::print_name() const { std::cout << "flow graph solver"; }
+
+std::map<reservation, bool> flow_graph::gsd_request(interval const& i) {
+  std::map<reservation, bool> available_res;
+  auto m = station_nodes_[0];
+  for (auto const& [r, s] : m) {
+    auto b = booking{};
+    b.r_ = r;
+    b.interval_ = i;
+    add_booking(b, false);
+    auto feasible = solve();
+    available_res.insert(std::make_pair(r, feasible));
+    remove_booking(b, false);
+  }
+  return available_res;
+}
+
+void flow_graph::add_gsd_booking(booking const& gsd_b, uint32_t const& seat) {
+  gsd_bookings_.insert(std::make_pair(seat, gsd_b));
+  add_booking(gsd_b, false);
+  solve();
+  auto removable_bookings =
+      get_removable_bookings(gsd_b, get_reached_capacity_ids(gsd_b.r_));
+
+  remove_booking(gsd_b, false);
+}
+
+std::vector<bool> flow_graph::get_removable_bookings(
+    booking const& gsd_b,
+    std::vector<std::pair<node_id_t, node_id_t>> const& capacity_reached) {
+  auto removable_bookings = std::vector<bool>{};
+  removable_bookings.resize(mcf_bookings_.size());
+  std::fill(removable_bookings.begin(), removable_bookings.end(), true);
+  for (auto const& [i, b] : utl::enumerate(mcf_bookings_)) {
+    if (b.interval_.overlaps(gsd_b.interval_)) {
+      removable_bookings[i] = false;
+      continue;
+    }
+    // only consider bookings whose interval contains index for which the
+    // capacity has been reached.
+    auto found = false;
+    for (auto const& [from, to] : capacity_reached) {
+      if (from == b.interval_.from_ && to == b.interval_.to_) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      removable_bookings[i] = false;
+    }
+
+    if (!matches(b.r_, gsd_b.r_)) {
+      removable_bookings[i] = false;
+    }
+  }
+  return removable_bookings;
+}
+
+std::vector<std::pair<node_id_t, node_id_t>>
+flow_graph::get_reached_capacity_ids(reservation const& r) {
+  auto capacity_reached = std::vector<std::pair<node_id_t, node_id_t>>{};
+  for (auto station_id = 0; station_id != station_nodes_.size(); ++station_id) {
+    for (auto const& [res, node_id] : station_nodes_[station_id]) {
+      if (!matches(res, r)) {
+        continue;
+      }
+      auto node = nodes_[node_id];
+      if (node.type_ != node_type::kSegment) {
+        continue;
+      }
+      auto outs = out_edges_[node_id];
+      auto in = in_edges_[node_id];
+      for (auto const& edge : out_edges_[node_id]) {
+        auto const target = nodes_[edge.target_];
+        if (target.type_ != node_type::kSegment) {
+          continue;
+        }
+        // check (1) is capacity reached on this edge? (2) has the found pair
+        // already been inserted in reverse order.
+        if (edge.capacity_ ==
+                solver_->get_occupied_seats(node_id, edge.target_) &&
+            (std::find(begin(capacity_reached), end(capacity_reached),
+                       std::make_pair(edge.target_, node_id)) ==
+             end(capacity_reached))) {
+          capacity_reached.emplace_back(std::make_pair(node_id, edge.target_));
+        }
+      }
+      for (auto const& edge : in_edges_[node_id]) {
+        auto const target = nodes_[edge.target_];
+        if (target.type_ != node_type::kSegment) {
+          continue;
+        }
+        // check (1) is capacity reached on this edge? (2) has the found pair
+        // already been inserted in reverse order.
+        if (edge.capacity_ ==
+                solver_->get_occupied_seats(node_id, edge.target_) &&
+            (std::find(begin(capacity_reached), end(capacity_reached),
+                       std::make_pair(edge.target_, node_id)) ==
+             end(capacity_reached))) {
+          capacity_reached.emplace_back(std::make_pair(node_id, edge.target_));
+        }
+      }
+    }
+  }
+  return capacity_reached;
+}
+
+void flow_graph::print() const { solver_->print(); }
+cista::raw::vector_map<booking_id_t, booking> flow_graph::get_mcf_bookings() {
+  return cista::raw::vector_map<booking_id_t, booking>{};
+}
+std::map<seat_id_t, std::vector<booking>> flow_graph::get_gsd_bookings() {
+  return std::map<seat_id_t, std::vector<booking>>{};
+}
 }  // namespace seat

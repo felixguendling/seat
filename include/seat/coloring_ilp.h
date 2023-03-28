@@ -43,8 +43,10 @@ struct interval_graph {
   }
 
   bool solve() {
-    constraints_.clear();
-    helpers_.clear();
+    solver_->Clear();
+    std::vector<gor::MPConstraint*> constraints_;
+    std::vector<operations_research::MPVariable*> node_colors_;
+    std::vector<operations_research::MPVariable*> helpers_;
     node_colors_.resize(booking_reservation_.size());
     int M = 55;
     for (auto const& [b_idx, b] : utl::enumerate(booking_reservation_)) {
@@ -73,14 +75,14 @@ struct interval_graph {
       auto const color = node_colors_[b_idx];
 
       auto j = 0U;
-      auto const helpers_c = solver_->MakeRowConstraint(1,std::numeric_limits<double>::infinity(),"");
+      auto const helpers_c = solver_->MakeRowConstraint(1,std::numeric_limits<double>::infinity(),fmt::format("helper_sum_{}",b_idx));
       constraints_.emplace_back(helpers_c);
       for (auto const& [from, to] : match_intervals) {
-        auto const helper = solver_->MakeBoolVar(fmt::format("{}_h{}", b_idx, j++));
-        auto const c1 = solver_->MakeRowConstraint(from-M,std::numeric_limits<double>::infinity(),"");
+        auto const helper = solver_->MakeBoolVar(fmt::format("{}_ih{}", b_idx, j++));
+        auto const c1 = solver_->MakeRowConstraint(from-M,std::numeric_limits<double>::infinity(),fmt::format("interval_constraintUpper_{}_{}",from,to));
         c1->SetCoefficient(color,1);
         c1->SetCoefficient(helper,-M);
-        auto const c2 = solver_->MakeRowConstraint(-to-M,std::numeric_limits<double>::infinity(),"");
+        auto const c2 = solver_->MakeRowConstraint(-to-M,std::numeric_limits<double>::infinity(),fmt::format("interval_constraintLower_{}_{}",from,to));
         c2->SetCoefficient(color,-1);
         c2->SetCoefficient(helper,-M);
         helpers_c->SetCoefficient(helper,1);
@@ -93,11 +95,11 @@ struct interval_graph {
       if(neighbors_[c_id].empty()){
         break;
       }
-      auto const c1 = solver_->MakeRowConstraint(0.5,std::numeric_limits<double>::infinity(),"");
-      auto const c2 = solver_->MakeRowConstraint(-std::numeric_limits<double>::infinity(),M-0.5,"");
       for(auto const& n:neighbors_[c_id]){
+        auto const c1 = solver_->MakeRowConstraint(1,std::numeric_limits<double>::infinity(),fmt::format("neighbourUpper_{}_{}", c_id,n));
+        auto const c2 = solver_->MakeRowConstraint(-std::numeric_limits<double>::infinity(),M-1,fmt::format("neighbourLower_{}_{}", c_id,n));
         auto const neighbour = node_colors_[n];
-        auto const helper_bool = solver_->MakeBoolVar(fmt::format("{}_h_{}", c_id,n));
+        auto const helper_bool = solver_->MakeBoolVar(fmt::format("{}_nh_{}", c_id,n));
         helpers_.emplace_back(helper_bool);
         c1->SetCoefficient(c,1);
         c1->SetCoefficient(neighbour,-1);
@@ -111,28 +113,25 @@ struct interval_graph {
       }
     }
     auto bb=solver_->Solve();
-    //std::cout<<"\n";
+    std::cout<<"\n";
     for(auto const& [id,i]:utl::enumerate(node_colors_)){
-      //std::cout<<"color "<<id<<": "<<i->solution_value()<<"\n";
+      std::cout<<"color "<<id<<": "<<i->solution_value()<<"\n";
     }
     for(auto const& [id,i]:utl::enumerate(helpers_)){
       //std::cout<<i->name()<<": "<<i->solution_value()<<"\n";
     }
     auto str = std::string{};
     solver_->ExportModelAsLpFormat(false,&str);
-    std::cout<<str;
+    //std::cout<<str;
     return bb;
   }
 
-  std::vector<gor::MPConstraint*> constraints_;
   std::vector<reservation> seat_properties_;
   std::vector<reservation> booking_reservation_;
   std::vector<interval> interval_;
   std::vector<std::vector<node_id_t>> neighbors_;
 
-  std::unique_ptr<operations_research::MPSolver> solver_;
-  std::vector<operations_research::MPVariable*> node_colors_;
-  std::vector<operations_research::MPVariable*> helpers_;
+    std::unique_ptr<operations_research::MPSolver> solver_;
 };
 
 }  // namespace seat

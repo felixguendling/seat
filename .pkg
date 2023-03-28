@@ -14,3 +14,11 @@
   url=git@github.com:google/or-tools.git
   branch=stable
   commit=92eab40155d5566039c92662632f196174f8da47
+[net]
+  url=git@github.com:motis-project/net.git
+  branch=master
+  commit=e9996f1df2375240e7402dc471e2a1746312ef58
+[json]
+  url=git@github.com:nlohmann/json.git
+  branch=develop
+  commit=6af826d0bdb55e4b69e3ad817576745335f243ca

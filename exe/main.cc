@@ -1,243 +1,40 @@
-#include <algorithm>
 #include <fstream>
-#include <iostream>
-#include <sstream>
 #include <tuple>
 #include <vector>
 
-#include "utl/enumerate.h"
-#include "utl/raii.h"
 #include "utl/timing.h"
-#include "utl/verify.h"
 
-#include "cista/containers/vecvec.h"
-
-#include "seat/booking.h"
-#include "seat/coloring_ilp.h"
 #include "seat/flow_graph.h"
-#include "seat/heuristic.h"
-#include "seat/nogo_cache.h"
-#include "seat/random_booking.h"
 #include "seat/reservation.h"
+#include "seat/simulate_booking_series.h"
+#include "seat/solver_full_path.h"
+#include "seat/solver_pathbased.h"
 
 using namespace seat;
 
-template <typename It, typename ResultFn, typename CompFn>
-void set_intersection(It first_a, It const last_a, It first_b, It const last_b,
-                      ResultFn&& result, CompFn&& lt) {
-  while (first_a != last_a && first_b != last_b) {
-    if (lt(*first_a, *first_b)) {
-      ++first_a;  // a < b  --> ++a
-    } else if (lt(*first_b, *first_a)) {
-      ++first_b;  // b < a  --> ++b
-    } else {
-      // match: b == a --> ++a, ++b
-      result(*first_a, *first_b);
-      ++first_a;
-      ++first_b;
-    }
-  }
-}
-
-/*
-template <typename SATSolver>
-struct interval_graph {
-  using node_id_t = std::uint16_t;
-  using seat_number_t = std::uint16_t;
-  using clause_t = typename SATSolver::clause_t;
-  using var_t = typename SATSolver::var_t;
-
-  struct assignment {
-    seat_number_t seat_;
-    var_t var_;
-  };
-
-  interval_graph(std::vector<reservation> seats) : seats_{std::move(seats)} {
-    reset();
-  }
-
-  void reset() {
-    reservation_.clear();
-    interval_.clear();
-    neighbors_.clear();
-    seat_assignment_lits.clear();
-
-    std::cout << "RESET" << std::endl;
-    solver = std::make_unique<SATSolver>();
-
-    for (auto const& b : bookings_) {
-      add_booking(b, true);
-    }
-  }
-
-  void add_booking(booking const& b, bool replay = false) {
-    if (!replay) {
-      bookings_.emplace_back(b);
-      return;
-    }
-
-    auto const node_id = neighbors_.size();
-
-    std::vector<node_id_t> overlap;
-    for (auto const& [node_id, interval] : utl::enumerate(interval_)) {
-      if (b.interval_.overlaps(interval)) {
-        overlap.emplace_back(node_id);
-      }
-    }
-    auto const& neighbors = neighbors_.emplace_back(overlap);
-
-    auto const& r = reservation_.emplace_back(b.r_);
-    interval_.emplace_back(b.interval_);
-
-    // Customer >=1 seat.
-    seat_assignment_lits.emplace_back();
-    clause_t clause;
-    for (auto const& [seat_number, s_r] : utl::enumerate(seats_)) {
-      if (matches(r, s_r)) {
-        auto const var = solver->create_var();
-        seat_assignment_lits.back().emplace_back(
-            assignment{static_cast<seat_number_t>(seat_number), var});
-        solver->push(clause, solver->make_lit(var));
-      }
-    }
-    solver->add_clause(clause);
-
-    // Overlapping bookings are not on the same seat.
-    for (auto const& neighbor : neighbors) {
-      auto const& seat_options_a = seat_assignment_lits[node_id];
-      auto const& seat_options_b = seat_assignment_lits[neighbor];
-      set_intersection(
-          begin(seat_options_a), end(seat_options_a), begin(seat_options_b),
-          end(seat_options_b),
-          [&](assignment const& a, assignment const& b) {
-            solver->add_clause(solver->negate(solver->make_lit(a.var_)),
-                               solver->negate(solver->make_lit(b.var_)));
-          },
-          [](assignment const& a, assignment const& b) {
-            return a.seat_ < b.seat_;
-          });
-    }
-  }
-
-  bool solve() {
-    // solver->toDimacs("dimacs.txt");
-    std::cout << "SOLVING" << std::endl;
-    UTL_START_TIMING(solve);
-    auto const sat = solver->solve();
-    UTL_STOP_TIMING(solve);
-    std::cout << "solve time: " << UTL_GET_TIMING_MS(solve) << "\n";
-    return sat;
-  }
-
-  std::vector<booking> bookings_;
-
-  std::unique_ptr<SATSolver> solver;
-  std::vector<std::vector<assignment>> seat_assignment_lits;
-
-  std::vector<reservation> seats_;
-  std::vector<reservation> reservation_;
-  std::vector<interval> interval_;
-  std::vector<std::vector<node_id_t>> neighbors_;
-};
- */
-
 int main() {
-  auto const number_of_segments = 1U;
-  auto const nnn= 0U;
-  std::map<reservation, std::uint32_t> number_of_seats{
-      {{wish::kNo, wish::kYes, wish::kNo, wish::kNo}, 4U},
-      {{wish::kYes, wish::kYes, wish::kNo, wish::kNo}, nnn},
-      {{wish::kNo, wish::kNo, wish::kNo, wish::kNo}, nnn},
-      {{wish::kYes, wish::kNo, wish::kNo, wish::kNo}, nnn},
+  srand(0U);
+  auto t = train();
+  auto total_seats = 800;
+  auto min_wagon_size = 50;
+  auto max_wagon_size = 70;
+  // min_wagon_size = max_wagon_size;
+  t.generate_random_train(total_seats, 0.5, 0.3, 0.2, max_wagon_size,
+                          min_wagon_size);
+  t.print();
+  std::map<reservation, uint32_t> a;
 
-      {{wish::kNo, wish::kYes, wish::kYes, wish::kNo}, nnn},
-      {{wish::kYes, wish::kYes, wish::kYes, wish::kNo}, nnn},
-      {{wish::kNo, wish::kNo, wish::kYes, wish::kNo}, nnn},
-      {{wish::kYes, wish::kNo, wish::kYes, wish::kNo}, nnn},
+  auto const& gsd_prob = 0.0;
+  auto const number_of_segments = 30U;
+  auto seats = t.get_number_of_seats();
 
-      {{wish::kNo, wish::kYes, wish::kNo, wish::kYes}, nnn},
-      {{wish::kYes, wish::kYes, wish::kNo, wish::kYes}, nnn},
-      {{wish::kNo, wish::kNo, wish::kNo, wish::kYes}, nnn},
-      {{wish::kYes, wish::kNo, wish::kNo, wish::kYes}, nnn},
-
-      {{wish::kNo, wish::kYes, wish::kYes, wish::kYes}, nnn},
-      {{wish::kYes, wish::kYes, wish::kYes, wish::kYes}, nnn},
-      {{wish::kNo, wish::kNo, wish::kYes, wish::kYes}, nnn},
-      {{wish::kYes, wish::kNo, wish::kYes, wish::kYes}, nnn}};
-
-  std::vector<reservation> seats;
-  for (auto const& [r, n] : number_of_seats) {
-    for (auto i = 0U; i != n; ++i) {
-      seats.emplace_back(r);
-    }
-  }
-
-  std::stringstream ss;
-
-  // Plot with
-  // gnuplot -p -e "plot 'timings.dat' with points pt 2"
-  auto timings = std::ofstream{"timings.dat"};
-
-  //auto solver = interval_graph<kissat_solver>{seats};
-  auto solver = interval_graph{seats};
-
-  nogo_cache nogo;
-
-  auto failed = 1000;
-  auto success = 0U;
-  auto nogo_count = 0U;
-  auto i = 0U;
-  auto solver_solved = 0U;
-  std::vector<std::uint64_t> timings_vec;
-  while (failed >= 0) {
-    auto const b = generate_random_booking(
-        {wish::kNo, wish::kYes, wish::kNo, wish::kNo}, number_of_segments);
-    std::cout << "adding booking: #" << ++i << " " << b << " - ";
-    try {
-      solver.add_booking(b);
-
-      UTL_START_TIMING(add_booking);
-      auto feasible = !nogo.is_nogo(b);
-      if (!feasible) {
-        ++nogo_count;
-      } else {
-        solver.reset();
-        feasible = !solver.solve();
-        ++solver_solved;
-
-        if (!feasible) {
-          nogo.add_entry(b);
-        }
-      }
-      UTL_STOP_TIMING(add_booking);
-
-      auto const timing = UTL_GET_TIMING_MS(add_booking);
-      timings_vec.emplace_back(timing);
-
-      std::cout << " -> " << (feasible ) << " [" << timing
-                << "ms, solver=" << solver_solved << ", remaining=" << failed
-                << ", success=" << success << ", nogo=" << nogo_count << "]\n";
-      timings << i << " " << timing << "\n";
-      if (!feasible) {
-        --failed;
-      } else {
-        ++success;
-      }
-      ss.str("");
-      // g.to_graphviz(ss, false);
-    } catch (std::exception const& e) {
-      std::cout << "ABORT: " << e.what() << "\n";
-      break;
-    }
-  }
-
-  std::uint64_t timing_sum;
-  for (auto const& t : timings_vec) {
-    timing_sum += t;
-  }
-  std::cout << "avg: " << static_cast<double>(timing_sum) / timings_vec.size()
-            << "\n";
-
-  std::ofstream{"seat_flow_graph.dot"} << ss.str();
-  // std::ofstream{"seat_flow.lp"} << g.lp_str();
+  std::vector<mcf_solver_i*> solvers;
+  auto ilp_solver = flow_graph{seats, number_of_segments};
+  auto fpb_solver = solver_fpb{seats, number_of_segments};
+  auto pb_solver = solver_pb{seats, number_of_segments};
+  solvers.emplace_back(&fpb_solver);
+  // solvers.emplace_back(&pb_solver);
+  //  solvers.emplace_back(&ilp_solver);
+  auto c = simulation(seats, solvers, gsd_prob, number_of_segments, t);
+  c.simulate();
 }

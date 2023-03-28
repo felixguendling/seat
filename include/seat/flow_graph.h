@@ -6,17 +6,19 @@
 #include <string>
 #include <vector>
 
+#include "mcf_solver_i.h"
 #include "seat/booking.h"
 #include "seat/reservation.h"
 #include "seat/types.h"
+#include "solver.h"
 
 namespace seat {
 
-struct solver;
+struct flow_graph_solver;
 
 enum class node_type { kSegment, kSource, kSink };
 
-struct flow_graph {
+struct flow_graph : mcf_solver_i {
   struct node {
     friend std::ostream& operator<<(std::ostream& out, node const& n);
     reservation r_;
@@ -33,12 +35,29 @@ struct flow_graph {
 
   flow_graph(std::map<reservation, std::uint32_t> const& number_of_seats,
              unsigned number_of_segments);
+  flow_graph(flow_graph const&);
   ~flow_graph();
 
   bool solve();
   void add_booking(booking const&);
-  void to_graphviz(std::ostream& out, bool print_in_edges);
+  void add_booking(booking const&, bool const);
+  void remove_booking(booking const&);
+  void remove_booking(booking const&, bool const);
+  void to_graphviz(std::ostream& out, bool print_in_edges) const;
   std::string lp_str() const;
+  void print_sizes() const;
+  void print_name() const;
+  void print() const;
+
+  cista::raw::vector_map<booking_id_t, booking> get_mcf_bookings();
+  std::map<seat_id_t, std::vector<booking>> get_gsd_bookings();
+
+  std::map<reservation, bool> gsd_request(interval const&);
+  void add_gsd_booking(booking const&, uint32_t const&);
+  std::vector<std::pair<node_id_t, node_id_t>> get_reached_capacity_ids(
+      reservation const&);
+  std::vector<bool> get_removable_bookings(
+      booking const&, std::vector<std::pair<node_id_t, node_id_t>> const&);
 
   auto get_create_node_fn(station_id_t, reservation booking_r, bool is_source);
   capacity_t get_capacity(node_id_t from, node_id_t to);
@@ -51,6 +70,8 @@ struct flow_graph {
   std::map<std::pair<station_id_t, reservation>, node_id_t> source_nodes_,
       sink_nodes_;
   std::unique_ptr<solver> solver_;
+  std::map<uint32_t, booking> gsd_bookings_;
+  std::map<uint32_t, std::vector<booking>> pseudo_gsd_bookings_;
+  std::vector<booking> mcf_bookings_;
 };
-
 }  // namespace seat

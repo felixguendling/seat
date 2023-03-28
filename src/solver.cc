@@ -112,4 +112,22 @@ void solver::write_flows() const {
   }
 }
 
+void solver::print_sizes() const {
+  std::cout << "vars: " << solver_->NumVariables() << "\n"
+            << "constraints: " << solver_->NumConstraints() << "\n";
+}
+
+int solver::get_occupied_seats(const seat::node_id_t from,
+                               const seat::node_id_t to) const {
+  return static_cast<int>(
+      flows_.at(std::make_pair(from, to))->solution_value());
+}
+
+void solver::print() const {
+  auto s = std::string();
+  auto ss = &s;
+  solver_->ExportModelAsLpFormat(false, ss);
+  std::cout << s << "\n";
+}
+
 }  // namespace seat
