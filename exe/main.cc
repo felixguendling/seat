@@ -4,11 +4,9 @@
 
 #include "utl/timing.h"
 
-#include "seat/flow_graph.h"
 #include "seat/reservation.h"
 #include "seat/simulate_booking_series.h"
-#include "seat/solver_full_path.h"
-#include "seat/solver_pathbased.h"
+#include "seat/solver.h"
 
 using namespace seat;
 
@@ -29,12 +27,8 @@ int main() {
   auto seats = t.get_number_of_seats();
 
   std::vector<mcf_solver_i*> solvers;
-  auto ilp_solver = flow_graph{seats, number_of_segments};
-  auto fpb_solver = solver_fpb{seats, number_of_segments};
-  auto pb_solver = solver_pb{seats, number_of_segments};
+  auto fpb_solver = solver{seats, number_of_segments};
   solvers.emplace_back(&fpb_solver);
-  // solvers.emplace_back(&pb_solver);
-  //  solvers.emplace_back(&ilp_solver);
   auto c = simulation(seats, solvers, gsd_prob, number_of_segments, t);
   c.simulate();
 }
