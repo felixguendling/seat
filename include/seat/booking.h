@@ -10,7 +10,8 @@
 namespace seat {
 
 struct booking {
-  bool operator==(booking other);
+  bool operator==(booking const&) const;
+  bool operator<(booking const&) const;
   friend std::ostream& operator<<(std::ostream&, booking const&);
   reservation r_;
   interval interval_;

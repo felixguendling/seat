@@ -5,10 +5,8 @@
 #include <string>
 #include <vector>
 
-#include "cista/containers/vector.h"
 #include "ortools/linear_solver/linear_solver.h"
 
-#include "mcf_solver_i.h"
 #include "seat/booking.h"
 #include "seat/reservation.h"
 #include "seat/train.h"
@@ -23,14 +21,14 @@ struct solver_seat {
   explicit solver_seat(
       uint32_t const&,
       std::map<seat_id_t, std::pair<wagon_id_t, reservation>> const&,
-      cista::raw::vector_map<booking_id_t, booking> const&,
-      std::map<seat_id_t, std::vector<booking>> const&, uint32_t const&);
+      std::vector<booking> const&, std::vector<booking_id_t> const&,
+      std::vector<booking_id_t> const&, std::vector<booking_id_t> const&,
+      std::vector<booking_id_t> const&, std::vector<seat_id_t> const&,
+      std::vector<seat_id_t> const&, uint32_t const&);
   bool solve();
   bool feasible();
 
-  cista::raw::vector_map<station_id_t,
-                         std::map<seat_id_t, std::pair<booking_id_t, booking>>>
-  assign_seats();
+  std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>> assign_seats();
   void print() const;
   void print_sizes() const;
   void print_name() const;
@@ -40,16 +38,21 @@ struct solver_seat {
   gor::MPConstraint* get_capacity_constraint(
       seat_id_t const& seat_id, small_station_id_t const station_id);
   void create_mcf_problem();
+  bool is_gsd_blocked(interval const&, seat_id_t const);
 
-private:
   operations_research::MPSolver* solver_;
-  operations_research::MPSolver::ResultStatus result_;
+  operations_research::MPSolver::ResultStatus result_ =
+      gor::MPSolver::INFEASIBLE;
 
   std::map<seat_id_t, std::pair<wagon_id_t, reservation>> seat_attributes_;
-  cista::raw::vector_map<booking_id_t, booking> mcf_bookings_;
+  std::vector<booking_id_t> mcf_booking_ids_;
+  std::vector<booking> bookings_;
   uint32_t total_seats_;
   uint32_t number_of_segments_;
-  std::map<seat_id_t, std::vector<booking>> pseudo_gsd_bookings_;
+  std::vector<seat_id_t> pseudo_seats_;
+  std::vector<seat_id_t> gsd_seats_;
+  std::vector<booking_id_t> gsd_ids_;
+  std::vector<booking_id_t> pseudo_ids_;
 
   std::map<std::pair<booking_id_t, seat_id_t>, gor::MPVariable*> vars_;
 

@@ -13,15 +13,27 @@ solver_seat::solver_seat(
     uint32_t const& num_seg,
     std::map<seat_id_t, std::pair<wagon_id_t, reservation>> const&
         seat_attributes,
-    cista::raw::vector_map<booking_id_t, booking> const& bookings,
-    std::map<seat_id_t, std::vector<booking>> const& gsd_bookings,
-    uint32_t const& total_seats)
+    std::vector<booking> const& bookings,
+    std::vector<booking_id_t> const& mcf_ids,
+    std::vector<booking_id_t> const& concrete_ids,
+    std::vector<booking_id_t> const& pseudo_ids,
+    std::vector<booking_id_t> const& gsd_ids,
+    std::vector<seat_id_t> const& pseudo_seats,
+    std::vector<seat_id_t> const& gsd_seats, uint32_t const& total_seats)
     : solver_{gor::MPSolver::CreateSolver(solver_name)},
       number_of_segments_(num_seg),
-      mcf_bookings_(bookings),
-      pseudo_gsd_bookings_(gsd_bookings),
+      bookings_(bookings),
+      pseudo_seats_(pseudo_seats),
+      gsd_seats_(gsd_seats),
+      mcf_booking_ids_(mcf_ids),
+      gsd_ids_(gsd_ids),
+      pseudo_ids_(pseudo_ids),
       seat_attributes_(seat_attributes),
-      total_seats_(total_seats) {}
+      total_seats_(total_seats) {
+  for (auto const& id : concrete_ids) {
+    mcf_booking_ids_.emplace_back(id);
+  }
+}
 
 bool solver_seat::solve() {
   result_ = solver_->Solve();
@@ -34,13 +46,17 @@ bool solver_seat::feasible() {
 }
 
 void solver_seat::create_mcf_problem() {
-  for (auto const& [b_id, b] : utl::enumerate(mcf_bookings_)) {
+  for (auto const& b_id : mcf_booking_ids_) {
+    auto b = bookings_[b_id];
     auto source_constraint = get_source_constraint(b_id);
     source_constraint->SetBounds(1, 1);
     auto from = b.interval_.from_;
     auto const to = b.interval_.to_;
     for (auto const& [s_id, res_wagon_pair] : seat_attributes_) {
       if (!matches(b.r_, res_wagon_pair.second)) {
+        continue;
+      }
+      if (is_gsd_blocked(b.interval_, s_id)) {
         continue;
       }
       from = b.interval_.from_;
@@ -55,6 +71,25 @@ void solver_seat::create_mcf_problem() {
       }
     }
   }
+}
+
+bool solver_seat::is_gsd_blocked(interval const& inter, seat_id_t const s_id) {
+  auto check = [&](std::vector<seat_id_t> s_ids,
+                   std::vector<booking_id_t> b_ids) {
+    for (auto const& [idx, gsd_s_id] : utl::enumerate(s_ids)) {
+      if (s_id != gsd_s_id) {
+        continue;
+      }
+      if (inter.overlaps(bookings_[b_ids[idx]].interval_)) {
+        return true;
+      }
+    }
+    return false;
+  };
+  if (check(pseudo_seats_, pseudo_ids_)) {
+    return true;
+  }
+  return check(gsd_seats_, gsd_ids_);
 }
 
 gor::MPVariable* solver_seat::get_var(booking_id_t const& b_id,
@@ -94,32 +129,25 @@ void solver_seat::print_sizes() const {
 
 void solver_seat::print_name() const { std::cout << "seat assignment"; }
 
-cista::raw::vector_map<station_id_t,
-                       std::map<seat_id_t, std::pair<booking_id_t, booking>>>
+std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>>
 solver_seat::assign_seats() {
-  auto ret = cista::raw::vector_map<
-      station_id_t, std::map<seat_id_t, std::pair<booking_id_t, booking>>>();
-  ret.resize(number_of_segments_);
-  for (auto station = station_id_t{0}; station != number_of_segments_;
-       ++station) {
-    for (auto const& [id, b] : utl::enumerate(mcf_bookings_)) {
-      for (auto seat_id = seat_id_t{0}; seat_id != total_seats_; ++seat_id) {
-        if (!matches(b.r_, seat_attributes_[seat_id].second)) {
-          continue;
-        }
-        if (!matches(b.r_, seat_attributes_[seat_id].second)) {
-          continue;
-        }
-        if (b.interval_.from_ > station || b.interval_.to_ < station) {
-          continue;
-        }
-        if (vars_[std::make_pair(id, seat_id)]->solution_value() == 1) {
-          ret[station].emplace(seat_id, std::make_pair(id, b));
-        }
+  auto b_ids = std::vector<booking_id_t>();
+  auto s_ids = std::vector<seat_id_t>();
+  for (auto const& [id, b_id] : utl::enumerate(mcf_booking_ids_)) {
+    for (auto seat_id = seat_id_t{0}; seat_id != total_seats_; ++seat_id) {
+      if (!matches(bookings_[b_id].r_, seat_attributes_[seat_id].second)) {
+        continue;
+      }
+      if (is_gsd_blocked(bookings_[b_id].interval_, seat_id)) {
+        continue;
+      }
+      if (vars_[std::make_pair(b_id, seat_id)]->solution_value() == 1) {
+        b_ids.emplace_back(b_id);
+        s_ids.emplace_back(seat_id);
       }
     }
   }
-  return ret;
+  return std::make_pair(b_ids, s_ids);
 }
 
 }  // namespace seat

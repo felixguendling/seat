@@ -2,8 +2,6 @@
 
 #include <map>
 
-#include "cista/containers/vector.h"
-
 #include "seat/booking.h"
 #include "seat/reservation.h"
 #include "seat/types.h"
@@ -36,8 +34,11 @@ struct wagon {
   void increment_seats_by_reservation_map(std::map<reservation, uint32_t>&);
   void generate_random_wagon(int&, double const&, double const&, int const&,
                              int const&);
-  void print(
-      std::map<seat_id_t, std::pair<booking_id_t, booking>> const&) const;
+  void print() const;
+  void print(small_station_id_t const, std::vector<booking_id_t> const&,
+             std::vector<booking_id_t> const&, std::vector<booking_id_t> const&,
+             std::vector<seat_id_t> const&, std::vector<seat_id_t> const&,
+             std::vector<seat_id_t> const&, std::vector<booking> const&) const;
   int roll_wagon_size(int const&, int const&);
   void get_number_of_seats(std::map<reservation, std::uint32_t>& seats) const;
   void get_seat_attributes(
@@ -56,14 +57,20 @@ struct train {
                              int const& max_wagon_size,
                              int const& min_wagon_size);
 
-  void print(
-      cista::raw::vector_map<
-          station_id_t,
-          std::map<seat_id_t, std::pair<booking_id_t, booking>>> const&) const;
+  void print(small_station_id_t const, std::vector<booking_id_t> const&,
+             std::vector<booking_id_t> const&, std::vector<booking_id_t> const&,
+             std::vector<seat_id_t> const&, std::vector<seat_id_t> const&,
+             std::vector<seat_id_t> const&, std::vector<booking> const&) const;
   void print() const;
   std::map<seat_id_t, std::pair<wagon_id_t, reservation>> get_seat_attributes()
       const;
   std::map<reservation, std::uint32_t> get_number_of_seats() const;
+  std::vector<seat_id_t> get_available_seats(
+      std::vector<reservation> const& available_res,
+      std::map<seat_id_t, std::vector<booking>> const& occupied);
+  template <typename F>
+  void for_each_seat(F&&);
+  void get_reservation(seat_id_t const&, reservation&);
 
   seat_id_t last_seat_id_;
   wagon_id_t last_wagon_id_;

@@ -11,18 +11,18 @@
 #include "seat/random_booking.h"
 #include "seat/reservation.h"
 #include "seat/seat_assignment.h"
+#include "seat/solver.h"
 #include "seat/train.h"
 
 namespace seat {
 struct simulation {
-  explicit simulation(std::map<reservation, std::uint32_t> const&,
-                      std::vector<mcf_solver_i*> const&, double const&,
-                      std::uint32_t const&, train const&);
+  explicit simulation(std::map<reservation, std::uint32_t> const&, solver*,
+                      double const&, std::uint32_t const&, train const&);
 
   void simulate();
 
   std::map<reservation, std::uint32_t> seats_by_res_;
-  std::vector<mcf_solver_i*> solvers_;
+  solver* solver_;
   double gsd_prob_;
   std::uint32_t number_of_segments_;
   train train_;
