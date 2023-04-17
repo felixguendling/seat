@@ -9,6 +9,7 @@
 
 #include "seat/booking.h"
 #include "seat/reservation.h"
+#include "seat/train.h"
 #include "seat/types.h"
 
 namespace seat {
@@ -43,7 +44,8 @@ struct solver {
   void concrete_booking_adjust(booking const&, bool const);
   std::vector<reservation> gsd_request(interval const&);
   void add_gsd_booking(booking const&, seat_id_t const&);
-
+  std::vector<seat_id_t> place_bookings_on_arbitrary_valid_seats(
+      std::vector<reservation> const&, train&);
   std::vector<std::pair<booking, int>> sort_bookings_into_res(
       reservation const&) const;
   std::vector<small_station_id_t> find_tight_capacities(booking const&) const;

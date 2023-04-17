@@ -3,6 +3,7 @@
 namespace seat {
 
 enum FEASIBLE { FEASIBLE, INFEASIBLE, UNKNOWN };
+enum BOOKING_TYPE { NORMAL, GSD, GROUP };
 using station_id_t = std::uint32_t;
 using node_id_t = std::uint32_t;
 using path_id_t = std::uint32_t;

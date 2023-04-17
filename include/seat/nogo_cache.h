@@ -13,6 +13,7 @@ struct booking;
 struct nogo_cache {
   void add_entry(booking const&);
   bool is_nogo(booking const&) const;
+  void clear();
 
 private:
   std::map<reservation, std::set<interval>> nogo_intervals_;

@@ -37,4 +37,6 @@ bool nogo_cache::is_nogo(booking const& b) const {
   return false;
 }
 
+void nogo_cache::clear() { nogo_intervals_.clear(); }
+
 }  // namespace seat

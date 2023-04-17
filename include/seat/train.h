@@ -71,6 +71,7 @@ struct train {
   template <typename F>
   void for_each_seat(F&&);
   void get_reservation(seat_id_t const&, reservation&);
+  std::vector<seat_id_t> get_seats(reservation const&);
 
   seat_id_t last_seat_id_;
   wagon_id_t last_wagon_id_;

@@ -26,7 +26,8 @@ struct solver_seat {
       std::vector<booking_id_t> const&, std::vector<seat_id_t> const&,
       std::vector<seat_id_t> const&, uint32_t const&);
   bool solve();
-  bool feasible();
+  void set_hint(std::vector<seat_id_t> const&);
+  bool feasible() const;
 
   std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>> assign_seats();
   void print() const;
@@ -38,6 +39,7 @@ struct solver_seat {
   gor::MPConstraint* get_capacity_constraint(
       seat_id_t const& seat_id, small_station_id_t const station_id);
   void create_mcf_problem();
+  void create_objective();
   bool is_gsd_blocked(interval const&, seat_id_t const);
 
   operations_research::MPSolver* solver_;

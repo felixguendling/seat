@@ -40,7 +40,7 @@ bool solver_seat::solve() {
   return feasible();
 };
 
-bool solver_seat::feasible() {
+bool solver_seat::feasible() const {
   return result_ == gor::MPSolver::OPTIMAL ||
          result_ == gor::MPSolver::FEASIBLE;
 }
@@ -72,6 +72,8 @@ void solver_seat::create_mcf_problem() {
     }
   }
 }
+
+// void solver_seat::create_arbitrary_valid_solution() { for (auto const& r :) }
 
 bool solver_seat::is_gsd_blocked(interval const& inter, seat_id_t const s_id) {
   auto check = [&](std::vector<seat_id_t> s_ids,
@@ -148,6 +150,34 @@ solver_seat::assign_seats() {
     }
   }
   return std::make_pair(b_ids, s_ids);
+}
+
+void solver_seat::set_hint(std::vector<seat_id_t> const& seats_by_booking_ids) {
+  solver_->SetSolverSpecificParametersAsString(
+      "heuristics/completesol/maxunknownrate = 1");
+  std::vector<std::pair<const gor::MPVariable*, double>> hint;
+  for (auto const& [pair, var] : vars_) {
+    if (seats_by_booking_ids[pair.first] == pair.second) {
+      hint.emplace_back(std::make_pair(var, 1));
+    } else {
+      hint.emplace_back(std::make_pair(var, 0));
+    }
+  }
+  auto sum = 0;
+  for (auto const& h : hint) {
+    if (h.second > 0) {
+      ++sum;
+    }
+  }
+  std::vector<int> found = std::vector<int>();
+  solver_->SetHint(hint);
+  std::cout << "hint size: " << hint.size() << " sum: " << sum << "\n";
+}
+
+void solver_seat::create_objective() {
+  gor::MPObjective* const objective = solver_->MutableObjective();
+  for (auto const& [pair, var] : vars_) {
+  }
 }
 
 }  // namespace seat

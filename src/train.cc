@@ -494,8 +494,18 @@ void train::get_reservation(seat_id_t const& s_id, reservation& r) {
   for_each_seat([&](seat_id_t const& seat_id, reservation const& res) {
     if (s_id == seat_id) {
       r = res;
+      return;
     }
   });
+}
+std::vector<seat_id_t> train::get_seats(reservation const& r) {
+  auto seats = std::vector<seat_id_t>();
+  for_each_seat([&](seat_id_t const& seat_id, reservation const& res) {
+    if (r == res) {
+      seats.emplace_back(seat_id);
+    }
+  });
+  return seats;
 }
 
 }  // namespace seat
