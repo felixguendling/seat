@@ -13,6 +13,7 @@
 #include "seat/simulate_booking_series.h"
 #include "seat/solver.h"
 #include "seat/verify_booking_assignment.h"
+#include "seat/wagon_solver.h"
 
 using namespace seat;
 seat::simulation::simulation(
@@ -92,14 +93,31 @@ void simulation::simulate() {
   std::cout << "\n";
   solver_->print_sizes();
   std::cout << "\n";
+
+  auto wagon_res_capacities =
+      train_.get_wagon_res_capacities(solver_->gsd_seats_);
+  auto wagon_solver = solver_wagon(
+      number_of_segments_, wagon_res_capacities, solver_->bookings_,
+      solver_->mcf_bookings_, solver_->concrete_bookings_,
+      solver_->pseudo_gsd_bookings_, solver_->gsd_bookings_,
+      solver_->pseudo_gsd_seats_, solver_->gsd_seats_);
+  wagon_solver.create_mcf_problem();
+  wagon_solver.set_hint(
+      solver_->place_bookings_in_arbitrary_valid_wagons(train_));
+  UTL_START_TIMING(wagon_assign_time);
+  auto feas = wagon_solver.solve();
+  auto const t_wagon = UTL_GET_TIMING_MS(wagon_assign_time);
+  std::pair<std::vector<booking_id_t>, std::vector<wagon_id_t>> skl =
+      wagon_solver.assign_seats();
+
   auto seat_solver = solver_seat(
       number_of_segments_, train_.get_seat_attributes(), solver_->bookings_,
       solver_->mcf_bookings_, solver_->concrete_bookings_,
       solver_->pseudo_gsd_bookings_, solver_->gsd_bookings_,
       solver_->pseudo_gsd_seats_, solver_->gsd_seats_, train_.last_seat_id_);
   seat_solver.create_mcf_problem();
-  seat_solver.set_hint(solver_->place_bookings_on_arbitrary_valid_seats(
-      get_concrete_reservations(train_.get_possible_reservations()), train_));
+  seat_solver.set_hint(
+      solver_->place_bookings_on_arbitrary_valid_seats(train_));
   UTL_START_TIMING(seat_assign_time);
   auto feasible = seat_solver.solve();
   auto const t = UTL_GET_TIMING_MS(seat_assign_time);
@@ -133,7 +151,7 @@ void simulation::simulate() {
   seat_solver.print_name();
   std::cout << "\n";
   seat_solver.print_sizes();
-  std::cout << "time spend: " << t;
+  std::cout << "time spend wagon: " << t_wagon << ", seats " << t;
   std::cout << "\n";
   std::cout << "\n";
   train_.print(number_of_segments_, assignment.first, solver_->gsd_bookings_,

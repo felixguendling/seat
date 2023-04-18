@@ -386,7 +386,9 @@ std::vector<small_station_id_t> solver::find_tight_capacities(
 }
 
 std::vector<seat_id_t> solver::place_bookings_on_arbitrary_valid_seats(
-    std::vector<reservation> const& concrete_res, train& train) {
+    train& train) {
+  auto const concrete_res =
+      get_concrete_reservations(train.get_possible_reservations());
   clear();
   for (auto const& id : mcf_bookings_) {
     create_vars_and_constraints(id);
@@ -512,5 +514,17 @@ std::map<seat_id_t, std::vector<booking>> solver::get_gsd_bookings() {
   insert_booking(pseudo_gsd_seats_, pseudo_gsd_bookings_);
   return gsd_bookings;
 }
+
+std::vector<wagon_id_t> solver::place_bookings_in_arbitrary_valid_wagons(
+    train& t) {
+  auto seats = place_bookings_on_arbitrary_valid_seats(t);
+  auto wagons = std::vector<wagon_id_t>();
+  wagons.resize(seats.size());
+  for (auto const& [idx, s_id] : utl::enumerate(seats)) {
+    wagons[idx] = t.seat_id_to_wagon_id(s_id);
+  }
+  return wagons;
+}
+
 void solver::to_graphviz(std::ostream&, bool const) const {}
 }  // namespace seat

@@ -6,7 +6,7 @@
 using namespace seat;
 
 int main() {
-  auto seat_amount = 80;
+  auto seat_amount = 800;
   auto const number_of_segments = 30U;
   for (auto j = seat_amount; j != seat_amount + 1; ++j) {
     for (auto i = 2; i != 3; ++i) {

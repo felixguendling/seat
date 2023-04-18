@@ -8,6 +8,7 @@
 
 #include "seat/booking.h"
 #include "utl/enumerate.h"
+#include "utl/get_or_create.h"
 
 namespace seat {
 seat_cluster::seat_cluster(const wish table, const wish big,
@@ -453,7 +454,8 @@ std::vector<seat_id_t> train::get_available_seats(
     std::map<seat_id_t, std::vector<booking>> const& occupied) {
   std::vector<seat_id_t> available_seats;
   auto collect_available_seats = [&](seat_id_t const& seat_id,
-                                     reservation const& seat_res) {
+                                     reservation const& seat_res,
+                                     wagon_id_t w_id) {
     if (std::find(available_res.begin(), available_res.end(), seat_res) ==
         available_res.end()) {
       return;
@@ -478,34 +480,62 @@ void train::for_each_seat(F&& f) {
       r[0] = wish::kYes;
       for (auto const& row : sc.window_seats_) {
         for (auto const& s_id : row) {
-          f(s_id, r);
+          f(s_id, r, w_id);
         }
       }
       r[0] = wish::kNo;
       for (auto const& row : sc.corridor_seats_) {
         for (auto const& s_id : row) {
-          f(s_id, r);
+          f(s_id, r, w_id);
         }
       }
     }
   }
 }
+
 void train::get_reservation(seat_id_t const& s_id, reservation& r) {
-  for_each_seat([&](seat_id_t const& seat_id, reservation const& res) {
-    if (s_id == seat_id) {
-      r = res;
-      return;
-    }
-  });
+  for_each_seat(
+      [&](seat_id_t const& seat_id, reservation const& res, wagon_id_t w_id) {
+        if (s_id == seat_id) {
+          r = res;
+          return;
+        }
+      });
 }
+
 std::vector<seat_id_t> train::get_seats(reservation const& r) {
   auto seats = std::vector<seat_id_t>();
-  for_each_seat([&](seat_id_t const& seat_id, reservation const& res) {
-    if (r == res) {
-      seats.emplace_back(seat_id);
-    }
-  });
+  for_each_seat(
+      [&](seat_id_t const& seat_id, reservation const& res, wagon_id_t w_id) {
+        if (r == res) {
+          seats.emplace_back(seat_id);
+        }
+      });
   return seats;
+}
+
+std::map<std::pair<wagon_id_t, reservation>, uint32_t>
+train::get_wagon_res_capacities(std::vector<seat_id_t> const& gsd_seats) {
+  auto wagon_res_cap = std::map<std::pair<wagon_id_t, reservation>, uint32_t>();
+  for_each_seat([&](seat_id_t const& seat_id, reservation const& res,
+                    wagon_id_t const& w_id) {
+    if (find(gsd_seats.begin(), gsd_seats.end(), seat_id) != gsd_seats.end()) {
+      return;
+    }
+    auto pair = std::make_pair(w_id, res);
+    utl::get_or_create(wagon_res_cap, pair, []() { return 0; });
+    wagon_res_cap[pair]++;
+  });
+  return wagon_res_cap;
+}
+
+wagon_id_t train::seat_id_to_wagon_id(seat_id_t const& s_id) const {
+  for (auto const& [w_id, w] : train_) {
+    if (w.last_id_ > s_id) {
+      continue;
+    }
+    return w_id;
+  }
 }
 
 }  // namespace seat
