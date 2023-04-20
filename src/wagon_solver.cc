@@ -134,8 +134,56 @@ void solver_wagon::print_name() const { std::cout << "seat assignment"; }
 
 void solver_wagon::create_objective() {
   gor::MPObjective* const objective = solver_->MutableObjective();
-  for (auto const& [pair, var] : vars_) {
+  auto max_group_id =
+      bookings_[std::max_element(
+                    mcf_booking_ids_.begin(), mcf_booking_ids_.end(),
+                    [&](booking_id_t const& b1, booking_id_t const& b2) {
+                      return bookings_[b1].group_id_ < bookings_[b2].group_id_;
+                    }) -
+                mcf_booking_ids_.begin()]
+          .group_id_;
+  for (auto group_id = 1; group_id != max_group_id + 1; ++group_id) {
+    for (auto const& [idx, booking] : utl::enumerate(bookings_)) {
+      if (booking.group_id_ != group_id) {
+        continue;
+      }
+      for (auto const& [idx2, booking2] : utl::enumerate(bookings_)) {
+        if (booking2.group_id_ != group_id) {
+          continue;
+        }
+        if (idx == idx2) {
+          continue;
+        }
+        auto constraint1 =
+            solver_->MakeRowConstraint(fmt::format("o_{}_{}_p", idx, idx2));
+        auto constraint2 =
+            solver_->MakeRowConstraint(fmt::format("o_{}_{}_n", idx, idx2));
+        auto ccc = gor::MPSolver::infinity();
+        constraint1->SetBounds(-5000, 0);
+        constraint2->SetBounds(-5000, 0);
+        objective_helper_vars_.emplace(
+            std::make_pair(idx, idx2),
+            solver_->MakeIntVar(
+                -operations_research::MPSolver::infinity(),
+                operations_research::MPSolver::infinity(),
+                fmt::format("helper_{}_{}_{}", booking.group_id_, idx, idx2)));
+        auto new_var = objective_helper_vars_.at(std::make_pair(idx, idx2));
+        constraint1->SetCoefficient(new_var, -1);
+        constraint2->SetCoefficient(new_var, -1);
+        objective->SetCoefficient(new_var, 1);
+        for (auto const& [pair, var] : vars_) {
+          auto b_id = pair.first.first;
+          if (b_id != idx && b_id != idx2) {
+            continue;
+          }
+          auto sign = (b_id == idx) ? 1 : -1;
+          constraint1->SetCoefficient(var, sign * pair.first.second);
+          constraint2->SetCoefficient(var, -sign * pair.first.second);
+        }
+      }
+    }
   }
+  print();
 }
 
 void solver_wagon::set_hint(

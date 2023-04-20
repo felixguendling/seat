@@ -45,7 +45,7 @@ struct simulation {
   int gsd_counter_ = 0;
   int normal_counter_ = 0;
   int group_counter_ = 0;
-  uint32_t last_group_id_ = 0;
-  uint8_t max_group_size_ = 40U;
+  uint32_t last_group_id_ = 1;
+  uint8_t max_group_size_ = 5U;
 };
 }  // namespace seat

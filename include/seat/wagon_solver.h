@@ -4,6 +4,7 @@
 #include "seat/booking.h"
 #include "seat/reservation.h"
 #include "seat/types.h"
+#include "train.h"
 
 namespace seat {
 
@@ -57,6 +58,8 @@ struct solver_wagon {
   std::map<std::pair<reservation, std::pair<wagon_id_t, small_station_id_t>>,
            gor::MPConstraint*>
       capacity_constraints_;
+  std::map<std::pair<booking_id_t, booking_id_t>, gor::MPVariable*>
+      objective_helper_vars_;
 };
 
 }  // namespace seat

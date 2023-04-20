@@ -74,7 +74,7 @@ struct train {
   std::vector<seat_id_t> get_seats(reservation const&);
   std::map<std::pair<wagon_id_t, reservation>, uint32_t>
   get_wagon_res_capacities(std::vector<seat_id_t> const&);
-  wagon_id_t seat_id_to_wagon_id(seat_id_t const&) const;
+  wagon_id_t seat_id_to_wagon_id(seat_id_t const&);
 
   seat_id_t last_seat_id_;
   wagon_id_t last_wagon_id_;

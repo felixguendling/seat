@@ -529,13 +529,16 @@ train::get_wagon_res_capacities(std::vector<seat_id_t> const& gsd_seats) {
   return wagon_res_cap;
 }
 
-wagon_id_t train::seat_id_to_wagon_id(seat_id_t const& s_id) const {
-  for (auto const& [w_id, w] : train_) {
-    if (w.last_id_ > s_id) {
-      continue;
-    }
-    return w_id;
-  }
+wagon_id_t train::seat_id_to_wagon_id(seat_id_t const& s_id) {
+  wagon_id_t w;
+  for_each_seat(
+      [&](seat_id_t const& seat_id, reservation const& res, wagon_id_t w_id) {
+        if (s_id == seat_id) {
+          w = w_id;
+          return;
+        }
+      });
+  return w;
 }
 
 }  // namespace seat
