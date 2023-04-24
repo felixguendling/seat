@@ -14,5 +14,6 @@ using encoded_reservation_t = std::uint8_t;
 using small_station_id_t = std::uint8_t;
 using wagon_id_t = std::uint8_t;
 using seat_id_t = uint32_t;
+using group_id_t = uint32_t;
 
 }  // namespace seat

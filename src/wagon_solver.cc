@@ -35,6 +35,10 @@ solver_wagon::solver_wagon(uint32_t const& num_seg,
 
 bool solver_wagon::solve() {
   result_ = solver_->Solve();
+  if (!solver_->VerifySolution(0.01, false)) {
+    std::cout << "\n\n\naborted!";
+    abort();
+  }
   return feasible();
 };
 
@@ -132,58 +136,84 @@ void solver_wagon::print_sizes() const {
 
 void solver_wagon::print_name() const { std::cout << "seat assignment"; }
 
-void solver_wagon::create_objective() {
+void solver_wagon::create_objective(wagon_id_t const& max_wagon_id) {
   gor::MPObjective* const objective = solver_->MutableObjective();
-  auto max_group_id =
-      bookings_[std::max_element(
-                    mcf_booking_ids_.begin(), mcf_booking_ids_.end(),
-                    [&](booking_id_t const& b1, booking_id_t const& b2) {
-                      return bookings_[b1].group_id_ < bookings_[b2].group_id_;
-                    }) -
-                mcf_booking_ids_.begin()]
-          .group_id_;
+  auto max_group_id = 0;
+  for (auto const& b : bookings_) {
+    if (b.group_id_ > max_group_id) {
+      max_group_id = b.group_id_;
+    }
+  }
   for (auto group_id = 1; group_id != max_group_id + 1; ++group_id) {
+    auto h = solver_->MakeBoolVar(fmt::format("h_{}", group_id));
+    auto h_c = solver_->MakeRowConstraint(fmt::format("h_c_{}", group_id));
+    h_c->SetBounds(-10000, 0);
+    h_c->SetCoefficient(h, -(max_group_id + 1));
+    auto abs_upper_bound_constraint = solver_->MakeRowConstraint(
+        fmt::format("helper_abs_upper_{}", group_id));
+    auto abs_lower_bound_constraint = solver_->MakeRowConstraint(
+        fmt::format("helper_abs_lower_{}", group_id));
+    auto abs_helper =
+        solver_->MakeIntVar(-operations_research::MPSolver::infinity(),
+                            operations_research::MPSolver::infinity(),
+                            fmt::format("helper_{}", group_id));
+    objective->SetCoefficient(h, 1);
+    abs_upper_bound_constraint->SetBounds(-10000, 0);
+    abs_lower_bound_constraint->SetBounds(-10000, 0);
+    objective_max_helper_vars_.emplace(
+        group_id,
+        solver_->MakeIntVar(-operations_research::MPSolver::infinity(),
+                            operations_research::MPSolver::infinity(),
+                            fmt::format("helper_max_{}", group_id)));
+    objective_min_helper_vars_.emplace(
+        group_id,
+        solver_->MakeIntVar(-operations_research::MPSolver::infinity(),
+                            operations_research::MPSolver::infinity(),
+                            fmt::format("helper_min_{}", group_id)));
+    /*objective_abs_helper_vars_.emplace(
+        group_id,
+        solver_->MakeIntVar(-operations_research::MPSolver::infinity(),
+                            operations_research::MPSolver::infinity(),
+                            fmt::format("helper__abs{}", group_id)));*/
+    abs_lower_bound_constraint->SetCoefficient(
+        objective_max_helper_vars_[group_id], -1);
+    abs_lower_bound_constraint->SetCoefficient(
+        objective_min_helper_vars_[group_id], 1);
+    abs_lower_bound_constraint->SetCoefficient(abs_helper, -1);
+
+    abs_upper_bound_constraint->SetCoefficient(
+        objective_max_helper_vars_[group_id], 1);
+    abs_upper_bound_constraint->SetCoefficient(
+        objective_min_helper_vars_[group_id], -1);
+    abs_upper_bound_constraint->SetCoefficient(abs_helper, -1);
+
+    objective->SetCoefficient(objective_max_helper_vars_[group_id], 1);
+    objective->SetCoefficient(objective_min_helper_vars_[group_id], -1);
+    h_c->SetCoefficient(objective_max_helper_vars_[group_id], 1);
+    h_c->SetCoefficient(objective_min_helper_vars_[group_id], -1);
     for (auto const& [idx, booking] : utl::enumerate(bookings_)) {
+      auto constraint_max =
+          solver_->MakeRowConstraint(fmt::format("o_max_{}_{}", group_id, idx));
+      auto constraint_min =
+          solver_->MakeRowConstraint(fmt::format("o_min_{}_{}", group_id, idx));
       if (booking.group_id_ != group_id) {
         continue;
       }
-      for (auto const& [idx2, booking2] : utl::enumerate(bookings_)) {
-        if (booking2.group_id_ != group_id) {
+      constraint_max->SetBounds(-10000, 0);
+      constraint_min->SetBounds(-10000, 0);
+      constraint_max->SetCoefficient(objective_max_helper_vars_[group_id], -1);
+      constraint_min->SetCoefficient(objective_min_helper_vars_[group_id], 1);
+      for (auto const& [pair, var] : vars_) {
+        auto const b_id = pair.first.first;
+        if (b_id != idx) {
           continue;
         }
-        if (idx == idx2) {
-          continue;
-        }
-        auto constraint1 =
-            solver_->MakeRowConstraint(fmt::format("o_{}_{}_p", idx, idx2));
-        auto constraint2 =
-            solver_->MakeRowConstraint(fmt::format("o_{}_{}_n", idx, idx2));
-        auto ccc = gor::MPSolver::infinity();
-        constraint1->SetBounds(-5000, 0);
-        constraint2->SetBounds(-5000, 0);
-        objective_helper_vars_.emplace(
-            std::make_pair(idx, idx2),
-            solver_->MakeIntVar(
-                -operations_research::MPSolver::infinity(),
-                operations_research::MPSolver::infinity(),
-                fmt::format("helper_{}_{}_{}", booking.group_id_, idx, idx2)));
-        auto new_var = objective_helper_vars_.at(std::make_pair(idx, idx2));
-        constraint1->SetCoefficient(new_var, -1);
-        constraint2->SetCoefficient(new_var, -1);
-        objective->SetCoefficient(new_var, 1);
-        for (auto const& [pair, var] : vars_) {
-          auto b_id = pair.first.first;
-          if (b_id != idx && b_id != idx2) {
-            continue;
-          }
-          auto sign = (b_id == idx) ? 1 : -1;
-          constraint1->SetCoefficient(var, sign * pair.first.second);
-          constraint2->SetCoefficient(var, -sign * pair.first.second);
-        }
+        auto const w_id = pair.first.second;
+        constraint_max->SetCoefficient(var, w_id);
+        constraint_min->SetCoefficient(var, -w_id);
       }
     }
   }
-  print();
 }
 
 void solver_wagon::set_hint(
@@ -192,8 +222,9 @@ void solver_wagon::set_hint(
       "heuristics/completesol/maxunknownrate = 1");
   std::vector<std::pair<const gor::MPVariable*, double>> hint;
   for (auto const& [pair, var] : vars_) {
-    auto w_id = pair.first.second;
-    if (wagons_by_booking_ids[w_id] == w_id) {
+    wagon_id_t const w_id = pair.first.second;
+    booking_id_t const b_id = pair.first.first;
+    if (wagons_by_booking_ids[b_id] == w_id) {
       hint.emplace_back(std::make_pair(var, 1));
     } else {
       hint.emplace_back(std::make_pair(var, 0));
@@ -208,6 +239,51 @@ void solver_wagon::set_hint(
   std::vector<int> found = std::vector<int>();
   solver_->SetHint(hint);
   std::cout << "hint size: " << hint.size() << " sum: " << sum << "\n";
+}
+
+int solver_wagon::print_helpers(bool const print) {
+  auto error_counter = 0;
+  for (auto const& [id, v] : objective_max_helper_vars_) {
+    if (objective_max_helper_vars_[id]->solution_value() -
+            objective_min_helper_vars_[id]->solution_value() >
+        0) {
+      error_counter++;
+    }
+    if (!print) {
+      continue;
+    }
+    std::cout << "group id " << id
+              << ": max: " << objective_max_helper_vars_[id]->solution_value()
+              << ", min: " << objective_min_helper_vars_[id]->solution_value()
+              << ", diff: "
+              << objective_max_helper_vars_[id]->solution_value() -
+                     objective_min_helper_vars_[id]->solution_value()
+              << "\n";
+  }
+  std::cout << "errors: " << error_counter << "\n";
+  return error_counter;
+}
+
+void solver_wagon::reset() {
+  solver_->Reset();
+  result_ = gor::MPSolver::INFEASIBLE;
+  wagon_res_capacities_.clear();
+  mcf_booking_ids_.clear();
+  bookings_.clear();
+  pseudo_seats_.clear();
+  gsd_seats_.clear();
+  gsd_ids_.clear();
+  pseudo_ids_.clear();
+  vars_.clear();
+  source_constraints_.clear();
+  capacity_constraints_.clear();
+  objective_max_helper_vars_.clear();
+  objective_min_helper_vars_.clear();
+  objective_abs_helper_vars_.clear();
+}
+bool solver_wagon::solve(int i) {
+  solver_->SetTimeLimit(absl::Minutes(i));
+  solve();
 }
 
 }  // namespace seat

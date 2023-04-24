@@ -94,9 +94,43 @@ void simulation::simulate() {
   std::cout << "\n";
   solver_->print_sizes();
   std::cout << "\n";
+  auto mcf_count = solver_->mcf_bookings_.size();
+  auto max_group_idd = 0;
+  for (auto const& b : solver_->bookings_) {
+    if (b.group_id_ > max_group_idd) {
+      max_group_idd = b.group_id_;
+    }
+  }
+  auto gsd_count = solver_->gsd_bookings_.size();
+  auto pseudo_count = solver_->pseudo_gsd_bookings_.size();
+  std::cout << "-------------------\n"
+            << "mcf: " << mcf_count << "\ngsd: " << gsd_count
+            << "\npseudo: " << pseudo_count << "\ngroups: " << max_group_idd
+            << "\n";
   // assign bookings to wagons **
   auto wagon_res_capacities =
       train_.get_wagon_res_capacities(solver_->gsd_seats_);
+  auto errors = std::vector<int>();
+  for (auto ij = 1; ij != 8; ++ij) {
+    auto wagon_solver = solver_wagon(
+        number_of_segments_, wagon_res_capacities, solver_->bookings_,
+        solver_->mcf_bookings_, solver_->concrete_bookings_,
+        solver_->pseudo_gsd_bookings_, solver_->gsd_bookings_,
+        solver_->pseudo_gsd_seats_, solver_->gsd_seats_);
+    wagon_solver.create_mcf_problem();
+    wagon_solver.set_hint(
+        solver_->place_bookings_in_arbitrary_valid_wagons(train_));
+    wagon_solver.create_objective(train_.train_.size());
+    UTL_START_TIMING(wagon_assign_time);
+    wagon_solver.solve(ij);
+    auto const t_wagon = UTL_GET_TIMING_MS(wagon_assign_time);
+    std::cout << "----------\n";
+    errors.emplace_back(wagon_solver.print_helpers(false));
+    wagon_solver.reset();
+  }
+  for (auto [idx, err] : utl::enumerate(errors)) {
+    std::cout << "time spend: " << +idx + 1 << ",     errors: " << +err << "\n";
+  }
   auto wagon_solver = solver_wagon(
       number_of_segments_, wagon_res_capacities, solver_->bookings_,
       solver_->mcf_bookings_, solver_->concrete_bookings_,
@@ -105,13 +139,13 @@ void simulation::simulate() {
   wagon_solver.create_mcf_problem();
   wagon_solver.set_hint(
       solver_->place_bookings_in_arbitrary_valid_wagons(train_));
-  wagon_solver.create_objective();
+  wagon_solver.create_objective(train_.train_.size());
   UTL_START_TIMING(wagon_assign_time);
-  auto feas = wagon_solver.solve();
+  wagon_solver.solve(10);
   auto const t_wagon = UTL_GET_TIMING_MS(wagon_assign_time);
+  std::cout << "----------\n";
   auto wagon_ids_by_booking_ids = wagon_solver.assign_seats();
   //  **
-
   HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
   std::cout << "wakgb\n";
   auto max_group_id = -1;
@@ -292,7 +326,9 @@ void simulation::add_group_booking() {
   group_counter_++;
   auto b = generate_random_booking(
       seats_by_res_, train_.get_possible_reservations(), number_of_segments_);
-  uint8_t group_size = (rand() % max_group_size_) + 5;
+  uint8_t g_s1 = (rand() % max_group_size_);
+  uint8_t g_s2 = (rand() % max_group_size_);
+  uint8_t group_size = (g_s1 > g_s2) ? (g_s2 + 2) : (g_s1 + 2);
   b.group_id_ = last_group_id_;
   b.r_[0] = wish::kAny;
   std::cout << "group: # " << success_ << " of size " << +group_size

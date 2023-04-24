@@ -15,7 +15,7 @@ struct booking {
   friend std::ostream& operator<<(std::ostream&, booking const&);
   reservation r_;
   interval interval_;
-  uint32_t group_id_ = 0;  // 0 -> no group
+  group_id_t group_id_ = 0;  // 0 -> no group
 };
 
 }  // namespace seat

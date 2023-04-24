@@ -20,6 +20,7 @@ struct solver_wagon {
       std::vector<booking_id_t> const&, std::vector<seat_id_t> const&,
       std::vector<seat_id_t> const&);
   bool solve();
+  bool solve(int);
   bool feasible() const;
 
   void print() const;
@@ -35,7 +36,9 @@ struct solver_wagon {
   void set_hint(std::vector<wagon_id_t> const&);
   std::pair<std::vector<booking_id_t>, std::vector<wagon_id_t>> assign_seats();
   void create_mcf_problem();
-  void create_objective();
+  void create_objective(wagon_id_t const&);
+  int print_helpers(bool const);
+  void reset();
 
   operations_research::MPSolver* solver_;
   operations_research::MPSolver::ResultStatus result_ =
@@ -58,8 +61,9 @@ struct solver_wagon {
   std::map<std::pair<reservation, std::pair<wagon_id_t, small_station_id_t>>,
            gor::MPConstraint*>
       capacity_constraints_;
-  std::map<std::pair<booking_id_t, booking_id_t>, gor::MPVariable*>
-      objective_helper_vars_;
+  std::map<group_id_t, gor::MPVariable*> objective_max_helper_vars_;
+  std::map<group_id_t, gor::MPVariable*> objective_min_helper_vars_;
+  std::map<group_id_t, gor::MPVariable*> objective_abs_helper_vars_;
 };
 
 }  // namespace seat
