@@ -10,12 +10,14 @@
 namespace seat {
 
 struct booking {
-  bool operator==(booking const&) const;
-  bool operator<(booking const&) const;
+  auto operator<=>(booking const&) const noexcept = default;
+  // bool operator==(booking const&) const;
+  // bool operator<(booking const&) const;
   friend std::ostream& operator<<(std::ostream&, booking const&);
   reservation r_;
   interval interval_;
   group_id_t group_id_ = 0;  // 0 -> no group
+  uint8_t group_size_;
 };
 
 }  // namespace seat

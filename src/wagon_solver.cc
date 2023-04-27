@@ -35,10 +35,6 @@ solver_wagon::solver_wagon(uint32_t const& num_seg,
 
 bool solver_wagon::solve() {
   result_ = solver_->Solve();
-  if (!solver_->VerifySolution(0.01, false)) {
-    std::cout << "\n\n\naborted!";
-    abort();
-  }
   return feasible();
 };
 
@@ -260,7 +256,6 @@ int solver_wagon::print_helpers(bool const print) {
                      objective_min_helper_vars_[id]->solution_value()
               << "\n";
   }
-  std::cout << "errors: " << error_counter << "\n";
   return error_counter;
 }
 
@@ -283,7 +278,7 @@ void solver_wagon::reset() {
 }
 bool solver_wagon::solve(int i) {
   solver_->SetTimeLimit(absl::Minutes(i));
-  solve();
+  return solve();
 }
 
 }  // namespace seat

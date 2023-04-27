@@ -18,7 +18,8 @@ namespace gor = operations_research;
 
 struct solver {
 
-  explicit solver(std::map<reservation, uint32_t> const& capacities, int const);
+  explicit solver(std::map<reservation, uint32_t> const& capacities,
+                  uint32_t const);
   bool solve();
   bool feasible();
 
@@ -45,10 +46,13 @@ struct solver {
   std::vector<reservation> gsd_request(interval const&);
   void add_gsd_booking(booking const&, seat_id_t const&);
   std::vector<seat_id_t> place_bookings_on_arbitrary_valid_seats(train&);
-  std::vector<std::pair<booking, int>> sort_bookings_into_res(
+  [[nodiscard]] std::vector<std::pair<booking, int>> sort_bookings_into_res(
       reservation const&) const;
-  std::vector<small_station_id_t> find_tight_capacities(booking const&) const;
+  [[nodiscard]] std::vector<small_station_id_t> find_tight_capacities(
+      booking const&) const;
   void to_graphviz(std::ostream&, bool const) const;
+  void release_pseudo(
+      std::map<seat_id_t, std::pair<wagon_id_t, reservation>> const&);
   std::vector<wagon_id_t> place_bookings_in_arbitrary_valid_wagons(train&);
 
   // bookings_ holds all bookings, the other vectors concerning bookings refer
@@ -83,7 +87,7 @@ private:
   std::map<booking, gor::MPConstraint*> source_constraints_;
   std::map<std::pair<reservation, small_station_id_t>, gor::MPConstraint*>
       capacity_constraints_;
-  int number_segments_;
+  uint32_t number_segments_;
   int one_ = int{1111};
   bool invalid = false;
 

@@ -2,6 +2,7 @@
 
 #include <map>
 
+#include "output_options.h"
 #include "seat/booking.h"
 #include "seat/reservation.h"
 #include "seat/types.h"
@@ -30,11 +31,11 @@ struct seat_cluster {
 struct wagon {
   explicit wagon(wish const, seat_id_t&);
 
-  std::vector<std::vector<seat_id_t>> get_columns() const;
-  void increment_seats_by_reservation_map(std::map<reservation, uint32_t>&);
+  [[nodiscard]] std::vector<std::vector<seat_id_t>> get_columns() const;
   void generate_random_wagon(int&, double const&, double const&, int const&,
                              int const&);
   void print() const;
+  void print_seat_ids() const;
   void print(small_station_id_t const, std::vector<booking_id_t> const&,
              std::vector<booking_id_t> const&, std::vector<booking_id_t> const&,
              std::vector<seat_id_t> const&, std::vector<seat_id_t> const&,
@@ -52,7 +53,7 @@ struct wagon {
 };
 
 struct train {
-  reservation get_possible_reservations() const;
+  [[nodiscard]] reservation get_possible_reservations() const;
   void generate_random_train(int&, double const&, double const&, double const&,
                              int const& max_wagon_size,
                              int const& min_wagon_size);
@@ -62,9 +63,11 @@ struct train {
              std::vector<seat_id_t> const&, std::vector<seat_id_t> const&,
              std::vector<seat_id_t> const&, std::vector<booking> const&) const;
   void print() const;
-  std::map<seat_id_t, std::pair<wagon_id_t, reservation>> get_seat_attributes()
+  void print_seat_ids(output_options const&) const;
+  [[nodiscard]] std::map<seat_id_t, std::pair<wagon_id_t, reservation>>
+  get_seat_attributes() const;
+  [[nodiscard]] std::map<reservation, std::uint32_t> get_number_of_seats()
       const;
-  std::map<reservation, std::uint32_t> get_number_of_seats() const;
   std::vector<seat_id_t> get_available_seats(
       std::vector<reservation> const& available_res,
       std::map<seat_id_t, std::vector<booking>> const& occupied);

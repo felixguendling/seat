@@ -7,6 +7,7 @@ namespace seat {
 std::ostream& operator<<(std::ostream& out, booking const& b) {
   return out << "(" << b.interval_ << ", " << b.r_ << ")";
 }
+/*
 bool booking::operator==(booking const& other) const {
   return to_int_all(other.r_) == to_int_all(r_) && other.interval_ == interval_;
 }
@@ -28,5 +29,5 @@ bool booking::operator<(booking const& other) const {
     return true;
   }
   return false;
-}
+}*/
 }  // namespace seat

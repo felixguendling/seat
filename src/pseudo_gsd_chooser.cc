@@ -18,7 +18,8 @@ pseudo_gsd_chooser::pseudo_gsd_chooser(
   b_ids_ = b_ids;
   // create vars
   for (auto const& id : b_ids_) {
-    vars_.emplace(id, solver_->MakeIntVar(0.0, 1.0, fmt::format("var_{}", id)));
+    auto v = solver_->MakeBoolVar(fmt::format("var_{}", id));
+    vars_.emplace(id, v);
   }
   // create constraints
   for (auto i = small_station_id_t{0}; i != segments; ++i) {
@@ -42,7 +43,6 @@ pseudo_gsd_chooser::pseudo_gsd_chooser(
     constraint->SetBounds(0.0, 1.0);
     constraints_.emplace_back(constraint);
   }
-  // print();
   solver_->Solve();
   for (auto const& [id, var] : vars_) {
     if (var->solution_value() > 0) {

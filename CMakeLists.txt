@@ -15,7 +15,7 @@ add_executable(seat-server ${seat-server-files})
 target_link_libraries(seat-server seatl web-server nlohmann_json)
 
 file(GLOB_RECURSE seat-exe-files exe/main.cc)
-add_executable(seat ${seat-exe-files} include/seat/pseudo_gsd_chooser.h include/seat/verify_booking_assignment.h include/seat/interval_graph.h include/seat/wagon_solver.h include/seat/seat_from_wagon_assignment.h)
+add_executable(seat ${seat-exe-files} include/seat/pseudo_gsd_chooser.h include/seat/verify_booking_assignment.h include/seat/interval_graph.h include/seat/wagon_solver.h include/seat/seat_from_wagon_assignment.h include/seat/simulation_specifics.h include/seat/output_options.h)
 target_link_libraries(seat seatl)
 
 file(GLOB_RECURSE seat-test-files test/*.cc)

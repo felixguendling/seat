@@ -66,28 +66,6 @@ wagon::wagon(wish const silent, seat_id_t& last_id)
   }
 }
 
-void wagon::increment_seats_by_reservation_map(
-    std::map<reservation, uint32_t>& seats_by_res) {
-  auto res = reservation{};
-  res[1] = silent_;
-  for (auto const& row : seat_clusters_) {
-    res[3] = row.big_;
-    res[2] = row.table_;
-    res[0] = wish::kYes;
-    for (auto const& v : row.window_seats_) {
-      for (auto const& s_id : v) {
-        seats_by_res[res]++;
-      }
-    }
-    res[0] = wish::kNo;
-    for (auto const& v : row.corridor_seats_) {
-      for (auto const& s_id : v) {
-        seats_by_res[res]++;
-      }
-    }
-  }
-}
-
 wish roll(double const& chance) {
   double r = (rand() % 10000) / double{10000};
   return chance > r ? wish::kYes : wish::kNo;
@@ -178,11 +156,34 @@ std::vector<std::vector<seat_id_t>> wagon::get_columns() const {
   }
   return columns;
 }
+
 void wagon::print() const {
   print(1, std::vector<booking_id_t>(), std::vector<booking_id_t>(),
         std::vector<booking_id_t>(), std::vector<seat_id_t>(),
         std::vector<seat_id_t>(), std::vector<seat_id_t>(),
         std::vector<booking>());
+}
+
+void print_b_ids_equal_length(booking_id_t const& b_id) {
+  std::cout << b_id << (b_id < 1000 ? " " : "") << (b_id < 100 ? " " : "")
+            << (b_id < 10 ? " " : "") << "|";
+}
+
+void wagon::print_seat_ids() const {
+  std::vector<std::vector<seat_id_t>> cols = get_columns();
+  for (auto i = 0; i != cols.size(); ++i) {
+    auto col = cols[i];
+    for (auto row = 0; row != col.size(); ++row) {
+      auto val = col[row];
+      if (val == std::numeric_limits<uint32_t>::max()) {
+        std::cout << "____|";
+        continue;
+      }
+      auto print = val;
+      print_b_ids_equal_length(print);
+    }
+    std::cout << "\n";
+  }
 }
 
 void wagon::print(small_station_id_t const segment,
@@ -194,119 +195,65 @@ void wagon::print(small_station_id_t const segment,
                   std::vector<seat_id_t> const& pseudo_seats,
                   std::vector<booking> const& bookings) const {
   HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-  std::vector<std::vector<seat_id_t>> cols = get_columns();
-  if (mcf.empty()) {
-    for (auto i = 0; i != cols.size(); ++i) {
-      auto col = cols[i];
-      for (auto row = 0; row != col.size(); ++row) {
-        auto val = col[row];
-        if (val == std::numeric_limits<uint32_t>::max()) {
+
+  seat_id_t s_id;
+  auto find = [&](std::vector<booking_id_t> b_ids, std::vector<seat_id_t> s_ids,
+                  int color) {
+    for (auto const& [id, mcf_s_id] : utl::enumerate(s_ids)) {
+      if (s_id != mcf_s_id) {
+        continue;
+      }
+      if (bookings[b_ids[id]].interval_.from_ <= segment &&
+          bookings[b_ids[id]].interval_.to_ > segment) {
+        SetConsoleTextAttribute(hConsole, color);
+        print_b_ids_equal_length(b_ids[id]);
+        SetConsoleTextAttribute(hConsole, 15);  // default color (white)
+        return true;
+      }
+    }
+    return false;
+  };
+  for (auto row = 0; row != 4; ++row) {
+    for (auto const& sc : seat_clusters_) {
+      for (auto col = 0; col != sc.window_seats_.size(); ++col) {
+        auto w_seats = sc.window_seats_[col];
+        auto c_seats = sc.corridor_seats_[col];
+        if (row == 3 && c_seats.size() == 1) {
+          s_id = std::numeric_limits<seat_id_t>::max();
+        } else if (row == 0) {
+          s_id = w_seats[row];
+        } else if (row == 1 + c_seats.size()) {
+          s_id = w_seats[row - c_seats.size()];
+        } else {
+          s_id = c_seats[row - 1];
+        }
+        if (s_id == std::numeric_limits<seat_id_t>::max()) {
           std::cout << "____|";
           continue;
         }
-        auto print = val;
-        std::cout << print << (print < 1000 ? " " : "")
-                  << (print < 100 ? " " : "") << (print < 10 ? " " : "") << "|";
-      }
-      std::cout << "\n";
-    }
-  } else { /*
-     for (auto i = 0; i != cols.size(); ++i) {
-       auto col = cols[i];
-       for (auto row = 0; row != col.size(); ++row) {
-         SetConsoleTextAttribute(hConsole, 15);
-         auto val = col[row];
-         if (val == std::numeric_limits<uint32_t>::max()) {
-           std::cout << "____|";
-           continue;
-         }
-         if (seat_assignment.find(val) == seat_assignment.end()) {
-           std::cout << "xxxx|";
-           continue;
-         }
-         auto print = seat_assignment.at(val).first;
-         if (std::find(gsd.begin(), gsd.end(), print) != gsd.end()) {
-           SetConsoleTextAttribute(hConsole, 2);  // green->gsd bookings
-         } else if (std::find(pseudo.begin(), pseudo.end(), print) !=
-                    pseudo.end()) {
-           SetConsoleTextAttribute(hConsole,
-                                   3);  // blue-ish->pseudo_gsd bookings
-         } else {
-           SetConsoleTextAttribute(hConsole, 12);  // red->normal bookings
-         }
-         std::cout << print << (print < 1000 ? " " : "")
-                   << (print < 100 ? " " : "") << (print < 10 ? " " : "") <<
-   "|";
-       }
-       SetConsoleTextAttribute(hConsole, 15);
-       std::cout << "\n";
-     }
-   }*/
-    auto p = [&](int i) {
-      std::cout << i << (i < 1000 ? " " : "") << (i < 100 ? " " : "")
-                << (i < 10 ? " " : "") << "|";
-    };
-    seat_id_t s_id;
-    auto find = [&](std::vector<booking_id_t> b_ids,
-                    std::vector<seat_id_t> s_ids, int color) {
-      for (auto const& [id, mcf_s_id] : utl::enumerate(s_ids)) {
-        if (s_id != mcf_s_id) {
+        auto found = find(gsd, gsd_seats, 2);  // green->gsd bookings
+        if (found) {
           continue;
         }
-        if (bookings[b_ids[id]].interval_.from_ <= segment &&
-            bookings[b_ids[id]].interval_.to_ > segment) {
-          SetConsoleTextAttribute(hConsole, color);
-          p(b_ids[id]);
+        found = find(pseudo, pseudo_seats, 3);  // blue-ish->pseudo_gsd bookings
+        if (found) {
+          continue;
+        }
+        found = find(mcf, mcf_seats, 12);
+        if (!found) {
+          if (std::find(gsd_seats.begin(), gsd_seats.end(), s_id) !=
+              gsd_seats.end()) {
+            SetConsoleTextAttribute(
+                hConsole,
+                2);  // gsd-color to indicate that seat has been gsd-blocked
+          }
+          std::cout << "xxxx|";
           SetConsoleTextAttribute(hConsole, 15);  // default color (white)
-          return true;
+          continue;
         }
       }
-      return false;
-    };
-    for (auto row = 0; row != 4; ++row) {
-      for (auto const& sc : seat_clusters_) {
-        for (auto col = 0; col != sc.window_seats_.size(); ++col) {
-          auto w_seats = sc.window_seats_[col];
-          auto c_seats = sc.corridor_seats_[col];
-          if (row == 3 && c_seats.size() == 1) {
-            s_id = std::numeric_limits<seat_id_t>::max();
-          } else if (row == 0) {
-            s_id = w_seats[row];
-          } else if (row == 1 + c_seats.size()) {
-            s_id = w_seats[row - c_seats.size()];
-          } else {
-            s_id = c_seats[row - 1];
-          }
-          if (s_id == std::numeric_limits<seat_id_t>::max()) {
-            std::cout << "____|";
-            continue;
-          }
-          auto found = false;
-          found = find(gsd, gsd_seats, 2);  // green->gsd bookings
-          if (found) {
-            continue;
-          }
-          found =
-              find(pseudo, pseudo_seats, 3);  // blue-ish->pseudo_gsd bookings
-          if (found) {
-            continue;
-          }
-          found = find(mcf, mcf_seats, 12);
-          if (!found) {
-            if (std::find(gsd_seats.begin(), gsd_seats.end(), s_id) !=
-                gsd_seats.end()) {
-              SetConsoleTextAttribute(
-                  hConsole,
-                  2);  // gsd-color to indicate that seat has been gsd-blocked
-            }
-            std::cout << "xxxx|";
-            SetConsoleTextAttribute(hConsole, 15);  // default color (white)
-            continue;
-          }
-        }
-      }
-      std::cout << "\n";
     }
+    std::cout << "\n";
   }
 }
 
@@ -316,6 +263,22 @@ void train::print() const {
   auto bookings_dummy = std::vector<booking>();
   print(1, assignment_dummy, assignment_dummy, assignment_dummy, seats_dummy,
         seats_dummy, seats_dummy, bookings_dummy);
+}
+
+void print_wagon_descr(int id, wagon w) {
+  std::cout << "wagon " << +id << ", (size: " << w.size_
+            << (w.silent_ == wish::kYes ? " silent" : " handy") << "):\n";
+}
+
+void train::print_seat_ids(output_options const& options) const {
+  if (!options.do_output_) {
+    return;
+  }
+  std::cout << "_____________________printing empty train_________________\n";
+  for (auto const& [id, w] : train_) {
+    print_wagon_descr(id, w);
+    w.print_seat_ids();
+  }
 }
 
 void train::print(small_station_id_t const last_station,
@@ -331,16 +294,9 @@ void train::print(small_station_id_t const last_station,
     std::cout << "___________________segment: " << station
               << "_______________________\n";
     for (auto const& [id, w] : train_) {
-      std::cout << "wagon " << +id << ", (size: " << w.size_
-                << (w.silent_ == wish::kYes ? " silent" : " handy") << "):\n";
+      print_wagon_descr(id, w);
       w.print(station, mcf, gsd, pseudo_gsd, mcf_seats, gsd_seats, pseudo_seats,
               bookings);
-    }
-  }
-  if (mcf.empty()) {
-    for (auto const& [id, w] : train_) {
-      std::cout << "wagon " << +id << ", (size: " << w.size_ << "):\n";
-      w.print();
     }
   }
 }

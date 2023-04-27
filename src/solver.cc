@@ -14,7 +14,7 @@ namespace seat {
 
 constexpr auto const solver_name = "SCIP";
 solver::solver(std::map<reservation, uint32_t> const& capacities,
-               int const number_segments)
+               uint32_t const number_segments)
     : solver_{gor::MPSolver::CreateSolver(solver_name)},
       number_segments_{number_segments} {
   for (auto const& [r, c] : capacities) {
@@ -278,8 +278,11 @@ void solver::add_gsd_booking(booking const& gsd_booking,
   std::cout << "\n";
   auto sorted_bookings = sort_bookings_into_res(gsd_booking.r_);
   std::vector<booking_id_t> valid_bookings;
+  /*
   for (auto const& [id, pair] : utl::enumerate(sorted_bookings)) {
-    if (pair.first.interval_.overlaps(gsd_booking.interval_)) {
+    auto interv = pair.first.interval_;
+    if (interv.from_ > gsd_booking.interval_.to_ &&
+        gsd_booking.interval_.from_ > interv.to_) {
       continue;
     }
     auto counter = pair.second;
@@ -299,7 +302,25 @@ void solver::add_gsd_booking(booking const& gsd_booking,
       pos = std::find_if(pos, bookings_.end(),
                          [&](booking b) { return b == pair.first; });
     } while (counter > 0);
+  }*/
+  for (auto const& [id, pair] : utl::enumerate(sorted_bookings)) {
+    auto interv = pair.first.interval_;
+    if (interv.from_ > gsd_booking.interval_.to_ &&
+        gsd_booking.interval_.from_ > interv.to_) {
+      continue;
+    }
+    auto counter = pair.second;
+    for (auto const& id : mcf_bookings_) {
+      if (counter == 0) {
+        break;
+      }
+      if (bookings_[id] == pair.first) {
+        valid_bookings.emplace_back(id);
+        counter--;
+      }
+    }
   }
+
   for (auto const& id : concrete_bookings_) {
     if (bookings_[id].interval_.overlaps(gsd_booking.interval_)) {
       continue;
@@ -350,7 +371,7 @@ std::vector<small_station_id_t> solver::find_tight_capacities(
   auto tight_capacities = std::vector<small_station_id_t>();
   for (auto const& [constraint_key, constraint] : capacity_constraints_) {
     auto const segment = constraint_key.second;
-    if (gsd_b.interval_.contains(segment)) {
+    if (gsd_b.interval_.from_ <= segment && gsd_b.interval_.to_ > segment) {
       continue;
     }
     // check only those constraints associated with the concrete reservation
@@ -372,16 +393,16 @@ std::vector<small_station_id_t> solver::find_tight_capacities(
     if (constraint->ub() == c) {
       tight_capacities.emplace_back(segment);
     }
-  } /*
-   for (auto const& [pair, counter] : capacities_) {
-     reservation r = pair.first;
-     if (!matches(r, gsd_b.r_)) {
-       continue;
-     }
-     if (counter == 0) {
-       tight_capacities.emplace_back(pair.second);
-     }
-   }*/
+  }
+  for (auto const& [pair, counter] : capacities_) {
+    reservation r = pair.first;
+    if (!matches(r, gsd_b.r_)) {
+      continue;
+    }
+    if (counter == 0) {
+      tight_capacities.emplace_back(pair.second);
+    }
+  }
   return tight_capacities;
 }
 
@@ -427,7 +448,6 @@ std::vector<seat_id_t> solver::place_bookings_on_arbitrary_valid_seats(
                              [&](booking b) { return b == pair.first; });
           continue;
         }
-        auto ttt = pos - bookings_.begin();
         if (seats_by_booking_id[pos - bookings_.begin()] !=
             std::numeric_limits<seat_id_t>::max()) {
           pos = std::next(pos);
@@ -527,4 +547,33 @@ std::vector<wagon_id_t> solver::place_bookings_in_arbitrary_valid_wagons(
 }
 
 void solver::to_graphviz(std::ostream&, bool const) const {}
+
+void solver::release_pseudo(
+    std::map<seat_id_t, std::pair<wagon_id_t, reservation>> const&
+        seat_attributes) {
+  auto insert_sorted = [](std::vector<booking_id_t>& v,
+                          booking_id_t const& id) {
+    auto it = std::upper_bound(v.cbegin(), v.cend(), id);
+    v.insert(it, id);
+  };
+  for (auto const& b_id : pseudo_gsd_bookings_) {
+    if (concreteness(bookings_[b_id].r_) == 0) {
+
+      insert_sorted(concrete_bookings_, b_id);
+    } else {
+      insert_sorted(mcf_bookings_, b_id);
+    }
+  }
+  pseudo_gsd_bookings_.resize(0);
+  pseudo_gsd_seats_.resize(0);
+  for (auto const& [idx, gsd_id] : utl::enumerate(gsd_bookings_)) {
+    reservation res = seat_attributes.at(gsd_seats_[idx]).second;
+    for (auto seg = small_station_id_t{0}; seg != number_segments_; ++seg) {
+      if (bookings_[gsd_id].interval_.from_ <= seg &&
+          bookings_[gsd_id].interval_.to_ > seg) {
+        capacities_.at(std::make_pair(res, seg))++;
+      }
+    }
+  }
+}
 }  // namespace seat
