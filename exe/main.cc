@@ -7,7 +7,7 @@ using namespace seat;
 
 int main() {
   auto specifics = simulation_specifics();
-  specifics.number_of_segments_ = 30U;
+  specifics.number_of_segments_ = 3U;
   specifics.gsd_prob_ = 0.2;
   specifics.group_prob_ = 0.1;
   specifics.max_group_size_ = 5;
@@ -15,7 +15,7 @@ int main() {
 
   // specifics.output_options_.do_output_ = false;
 
-  auto seat_amount = 400;
+  auto seat_amount = 40;
   for (auto j = seat_amount; j != seat_amount + 1; j++) {
     for (auto i = 2; i != 3; ++i) {
       srand(i);

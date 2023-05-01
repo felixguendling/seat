@@ -91,4 +91,8 @@ struct train {
   wagon_id_t last_wagon_id_;
   std::map<wagon_id_t, wagon> train_;
 };
+static const uint8_t default_color_ = 2;
+static const uint8_t gsd_color_ = 1;
+static const uint8_t pseudo_color_ = 0;
+static bool print_group_ids_ = true;
 }  // namespace seat

@@ -164,9 +164,9 @@ void wagon::print() const {
         std::vector<booking>());
 }
 
-void print_b_ids_equal_length(booking_id_t const& b_id) {
-  std::cout << b_id << (b_id < 1000 ? " " : "") << (b_id < 100 ? " " : "")
-            << (b_id < 10 ? " " : "") << "|";
+void print_b_ids_equal_length(booking_id_t const& id, bool group) {
+  std::cout << (group ? "" : (id < 1000 ? " " : "")) << (id < 100 ? " " : "")
+            << (id < 10 ? " " : "") << (group ? "g" : "") << id << "|";
 }
 
 void wagon::print_seat_ids() const {
@@ -180,7 +180,7 @@ void wagon::print_seat_ids() const {
         continue;
       }
       auto print = val;
-      print_b_ids_equal_length(print);
+      print_b_ids_equal_length(print, false);
     }
     std::cout << "\n";
   }
@@ -206,7 +206,7 @@ void wagon::print(small_station_id_t const segment,
       if (bookings[b_ids[id]].interval_.from_ <= segment &&
           bookings[b_ids[id]].interval_.to_ > segment) {
         SetConsoleTextAttribute(hConsole, color);
-        print_b_ids_equal_length(b_ids[id]);
+        print_b_ids_equal_length(b_ids[id], false);
         SetConsoleTextAttribute(hConsole, 15);  // default color (white)
         return true;
       }
@@ -272,14 +272,18 @@ void wagon::print2(small_station_id_t const segment,
       if (s_id != mcf_s_id) {
         continue;
       }
+      auto bla = b_ids[id];
       auto b = bookings[b_ids[id]];
-      if (b.group_id_ != 0) {
-        color = (b.group_id_ % 20) + 16;
-      }
       if (b.interval_.from_ <= segment && b.interval_.to_ > segment) {
+        if (b.group_id_ != 0) {
+          color = (b.group_id_ % 250) + 3;
+        }
         SetConsoleTextAttribute(hConsole, color);
-        print_b_ids_equal_length(b_ids[id]);
-        SetConsoleTextAttribute(hConsole, 15);  // default color (white)
+        print_b_ids_equal_length(
+            print_group_ids_ ? ((b.group_id_ != 0) ? +b.group_id_ : b_ids[id])
+                             : b_ids[id],
+            b.group_id_ != 0 && print_group_ids_);
+        SetConsoleTextAttribute(hConsole, default_color_);
         return true;
       }
     }
@@ -304,20 +308,22 @@ void wagon::print2(small_station_id_t const segment,
           std::cout << "____|";
           continue;
         }
-        auto found = find(gsd, gsd_seats, 2);  // green->gsd bookings
+        auto found = find(gsd, gsd_seats, gsd_color_);  // green->gsd bookings
         if (found) {
           continue;
         }
-        found = find(normal_bookings.first, normal_bookings.second, 12);
+        found =
+            find(normal_bookings.first, normal_bookings.second, default_color_);
         if (!found) {
           if (std::find(gsd_seats.begin(), gsd_seats.end(), s_id) !=
               gsd_seats.end()) {
-            SetConsoleTextAttribute(
-                hConsole,
-                2);  // gsd-color to indicate that seat has been gsd-blocked
+            SetConsoleTextAttribute(hConsole,
+                                    gsd_color_);  // gsd-color to indicate that
+                                                  // seat has been gsd-blocked
           }
           std::cout << "xxxx|";
-          SetConsoleTextAttribute(hConsole, 15);  // default color (white)
+          SetConsoleTextAttribute(hConsole,
+                                  default_color_);  // default color (white)
           continue;
         }
       }
@@ -385,6 +391,14 @@ void train::print2(small_station_id_t const last_station,
       w.print2(station, bookings, normal_bookings, gsd, gsd_seats);
     }
   }
+
+  HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+  SetConsoleTextAttribute(hConsole, default_color_);
+  std::cout << "\ndefault";
+  SetConsoleTextAttribute(hConsole, gsd_color_);
+  std::cout << "\ngsd";
+  SetConsoleTextAttribute(hConsole, pseudo_color_);
+  std::cout << "\npseudo";
 }
 
 void seat_cluster::get_seat_attributes(
