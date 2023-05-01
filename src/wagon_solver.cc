@@ -31,6 +31,9 @@ solver_wagon::solver_wagon(uint32_t const& num_seg,
   for (auto const& id : concrete_ids) {
     mcf_booking_ids_.emplace_back(id);
   }
+  for (auto const& id : pseudo_ids_) {
+    mcf_booking_ids_.emplace_back(id);
+  }
 }
 
 bool solver_wagon::solve() {
@@ -43,7 +46,7 @@ bool solver_wagon::feasible() const {
          result_ == gor::MPSolver::FEASIBLE;
 }
 
-void solver_wagon::create_mcf_problem() {
+void solver_wagon::create_mcf_problem(train& t) {
   for (auto const& b_id : mcf_booking_ids_) {
     auto b = bookings_[b_id];
     auto source_constraint = get_source_constraint(b_id);
@@ -67,6 +70,15 @@ void solver_wagon::create_mcf_problem() {
                                        wagon_res_capacities_[wagon_res_pair]);
         ++from;
       }
+    }
+  }
+  for (auto const& [idx, gsd_seat] : utl::enumerate(gsd_seats_)) {
+    auto interv = bookings_[gsd_ids_[idx]].interval_;
+    for (auto i = interv.from_; i != interv.to_; ++i) {
+      auto constraint = capacity_constraints_[std::make_pair(
+          bookings_[gsd_ids_[idx]].r_,
+          std::make_pair(t.seat_id_to_wagon_id(gsd_seat), i))];
+      constraint->SetBounds(0, constraint->ub() - 1);
     }
   }
 }

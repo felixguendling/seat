@@ -26,12 +26,12 @@ struct solver_seat_from_wagon {
       std::vector<booking_id_t> const&, std::vector<booking_id_t> const&,
       std::vector<booking_id_t> const&, std::vector<seat_id_t> const&,
       std::vector<seat_id_t> const&, uint32_t const&, train const&);
-  bool solve();
+  void solve();
   void set_hint(
       std::pair<std::vector<booking_id_t>, std::vector<wagon_id_t>> const&);
   bool feasible() const;
 
-  std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>> assign_seats();
+  void assign_seats(wagon_id_t const&);
   void print() const;
   void print_sizes() const;
   void print_name() const;
@@ -40,9 +40,10 @@ struct solver_seat_from_wagon {
   gor::MPConstraint* get_source_constraint(booking_id_t const& b_id);
   gor::MPConstraint* get_capacity_constraint(
       seat_id_t const& seat_id, small_station_id_t const station_id);
-  void create_mcf_problem();
+  void create_mcf_problem(wagon_id_t const&);
   void create_objective();
   bool is_gsd_blocked(interval const&, seat_id_t const);
+  void reset();
 
   operations_research::MPSolver* solver_;
   operations_research::MPSolver::ResultStatus result_ =
@@ -68,6 +69,8 @@ struct solver_seat_from_wagon {
       capacity_constraints_;
   std::map<std::pair<booking_id_t, booking_id_t>, gor::MPVariable*>
       objective_helper_vars_;
+  std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>>
+      seats_by_bookings_;
 };
 
 }  // namespace seat

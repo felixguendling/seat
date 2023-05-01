@@ -33,6 +33,11 @@ bool solver::solve() {
     invalid = false;
     return false;
   }
+  clear();
+  for (auto const& id : mcf_bookings_) {
+    create_vars_and_constraints(id);
+  }
+  replace_ones();
   result_ = solver_->Solve();
   return feasible();
 };
@@ -49,11 +54,6 @@ void solver::add_booking(booking const& new_b) {
   } else {
     mcf_bookings_.emplace_back(bookings_.size() - 1);
   }
-  clear();
-  for (auto const& id : mcf_bookings_) {
-    create_vars_and_constraints(id);
-  }
-  replace_ones();
 }
 
 void solver::erase(std::vector<booking_id_t>& vec, booking const& b) {
@@ -410,12 +410,6 @@ std::vector<seat_id_t> solver::place_bookings_on_arbitrary_valid_seats(
     train& train) {
   auto const concrete_res =
       get_concrete_reservations(train.get_possible_reservations());
-  clear();
-  for (auto const& id : mcf_bookings_) {
-    create_vars_and_constraints(id);
-  }
-  replace_ones();
-  solve();
   auto interv_graph = interval_graph(bookings_);
   auto seats_by_booking_id = std::vector<seat_id_t>();
   seats_by_booking_id.resize(bookings_.size());
@@ -430,63 +424,61 @@ std::vector<seat_id_t> solver::place_bookings_on_arbitrary_valid_seats(
   place_gsd(gsd_bookings_, gsd_seats_);
   place_gsd(pseudo_gsd_bookings_, pseudo_gsd_seats_);
   std::vector<booking_id_t> valid_bookings;
+  std::vector<booking_id_t> valid_gsd;
   for (auto const& r : concrete_res) {
     valid_bookings.clear();
-    std::vector<std::pair<booking, int>> sorted_bookings =
-        sort_bookings_into_res(r);
-    for (auto const& [id, pair] : utl::enumerate(sorted_bookings)) {
-      auto counter = pair.second;
-      auto pos = std::find_if(bookings_.begin(), bookings_.end(),
-                              [&](booking b) { return b == pair.first; });
-      do {
-        if (std::find(mcf_bookings_.begin(), mcf_bookings_.end(),
-                      pos - bookings_.begin()) == mcf_bookings_.end() &&
-            std::find(concrete_bookings_.begin(), concrete_bookings_.end(),
-                      pos - bookings_.begin()) == concrete_bookings_.end()) {
-          pos = std::next(pos);
-          pos = std::find_if(pos, bookings_.end(),
-                             [&](booking b) { return b == pair.first; });
-          continue;
-        }
-        if (seats_by_booking_id[pos - bookings_.begin()] !=
-            std::numeric_limits<seat_id_t>::max()) {
-          pos = std::next(pos);
-          pos = std::find_if(pos, bookings_.end(),
-                             [&](booking b) { return b == pair.first; });
-          continue;
-        }
-        valid_bookings.emplace_back(pos - bookings_.begin());
-        pos = std::next(pos);
-        counter--;
-        pos = std::find_if(pos, bookings_.end(),
-                           [&](booking b) { return b == pair.first; });
-      } while (counter > 0);
-    }
-    for (auto const& id : concrete_bookings_) {
-      if (!matches(bookings_[id].r_, r)) {
-        continue;
-      }
-      valid_bookings.emplace_back(id);
-    }
+    get_actual_booking_ids_from_amount(sort_bookings_into_res(r),
+                                       valid_bookings, r, seats_by_booking_id);
     interv_graph.create_graph(valid_bookings);
     std::vector<seat_id_t> seats = train.get_seats(r);
-    for (auto const& s : pseudo_gsd_seats_) {
-      auto pos = find(seats.begin(), seats.end(), s);
-      if (pos != seats.end()) {
-        seats.erase(pos);
-      }
-    }
-    for (auto const& s : gsd_seats_) {
-      auto pos = find(seats.begin(), seats.end(), s);
-      if (pos != seats.end()) {
-        seats.erase(pos);
-      }
-    }
     for (auto const& [idx, b_id] : utl::enumerate(interv_graph.b_ids_)) {
+      if (idx == seats_by_booking_id.size()) {
+        break;
+      }
       seats_by_booking_id[b_id] = seats[interv_graph.seats_by_booking_id_[idx]];
     }
   }
   return seats_by_booking_id;
+}
+
+void solver::get_actual_booking_ids_from_amount(
+    std::vector<std::pair<booking, int>> const& amount_by_booking,
+    std::vector<booking_id_t>& container, reservation const& r,
+    std::vector<seat_id_t> const& seats_by_booking_id) const {
+  for (auto const& [id, pair] : utl::enumerate(amount_by_booking)) {
+    auto counter = pair.second;
+    auto pos = std::find_if(bookings_.begin(), bookings_.end(),
+                            [&](booking b) { return b == pair.first; });
+    do {
+      if (std::find(mcf_bookings_.begin(), mcf_bookings_.end(),
+                    pos - bookings_.begin()) == mcf_bookings_.end() &&
+          std::find(concrete_bookings_.begin(), concrete_bookings_.end(),
+                    pos - bookings_.begin()) == concrete_bookings_.end()) {
+        pos = std::next(pos);
+        pos = std::find_if(pos, bookings_.end(),
+                           [&](booking b) { return b == pair.first; });
+        continue;
+      }
+      if (seats_by_booking_id[pos - bookings_.begin()] !=
+          std::numeric_limits<seat_id_t>::max()) {
+        pos = std::next(pos);
+        pos = std::find_if(pos, bookings_.end(),
+                           [&](booking b) { return b == pair.first; });
+        continue;
+      }
+      container.emplace_back(pos - bookings_.begin());
+      pos = std::next(pos);
+      counter--;
+      pos = std::find_if(pos, bookings_.end(),
+                         [&](booking b) { return b == pair.first; });
+    } while (counter > 0);
+  }
+  for (auto const& id : concrete_bookings_) {
+    if (!matches(bookings_[id].r_, r)) {
+      continue;
+    }
+    container.emplace_back(id);
+  }
 }
 
 std::vector<std::pair<booking, int>> solver::sort_bookings_into_res(

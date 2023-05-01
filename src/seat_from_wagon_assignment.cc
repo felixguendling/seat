@@ -39,9 +39,30 @@ solver_seat_from_wagon::solver_seat_from_wagon(
   }
 }
 
-bool solver_seat_from_wagon::solve() {
-  result_ = solver_->Solve();
-  return feasible();
+void solver_seat_from_wagon::solve() {
+  seats_by_bookings_.first = std::vector<booking_id_t>();
+  seats_by_bookings_.second = std::vector<seat_id_t>();
+  auto max_wagon_id = 0;
+  for (auto const& w_id : wagon_id_by_booking_ids_.second) {
+    if (w_id > max_wagon_id) {
+      max_wagon_id = w_id;
+    }
+  }
+  std::cout << "\n";
+  for (auto const& [idx, gsd] : utl::enumerate(gsd_seats_)) {
+    auto interv = bookings_[gsd_ids_[idx]].interval_;
+    std::cout << "gsd seat: " << gsd << " from: " << +interv.from_
+              << " to: " << +interv.to_ << "\n";
+  }
+  for (auto i = wagon_id_t{0}; i != max_wagon_id + 1; ++i) {
+    reset();
+    create_mcf_problem(i);
+    result_ = solver_->Solve();
+    assign_seats(i);
+    if (!feasible()) {
+      abort();
+    }
+  }
 };
 
 bool solver_seat_from_wagon::feasible() const {
@@ -49,26 +70,29 @@ bool solver_seat_from_wagon::feasible() const {
          result_ == gor::MPSolver::FEASIBLE;
 }
 
-void solver_seat_from_wagon::create_mcf_problem() {
+void solver_seat_from_wagon::create_mcf_problem(wagon_id_t const& w_id) {
   for (auto const& b_id : mcf_booking_ids_) {
     auto b = bookings_[b_id];
-    auto source_constraint = get_source_constraint(b_id);
-    source_constraint->SetBounds(1, 1);
     auto from = b.interval_.from_;
     auto const to = b.interval_.to_;
     for (auto const& [s_id, res_wagon_pair] : seat_attributes_) {
+      if (w_id != res_wagon_pair.first) {
+        continue;
+      }
       if (!matches(b.r_, res_wagon_pair.second)) {
         continue;
       }
       auto pos = find(wagon_id_by_booking_ids_.first.begin(),
                       wagon_id_by_booking_ids_.first.end(), b_id) -
                  wagon_id_by_booking_ids_.first.begin();
-      if (res_wagon_pair.first != wagon_id_by_booking_ids_.second[pos]) {
+      if (w_id != wagon_id_by_booking_ids_.second[pos]) {
         continue;
       }
       if (is_gsd_blocked(b.interval_, s_id)) {
         continue;
       }
+      auto source_constraint = get_source_constraint(b_id);
+      source_constraint->SetBounds(1, 1);
       from = b.interval_.from_;
       auto var = get_var(b_id, s_id);
       var->SetBounds(0, 1);
@@ -82,9 +106,6 @@ void solver_seat_from_wagon::create_mcf_problem() {
     }
   }
 }
-
-// void solver_seat_from_wagon::create_arbitrary_valid_solution() { for (auto
-// const& r :) }
 
 bool solver_seat_from_wagon::is_gsd_blocked(interval const& inter,
                                             seat_id_t const s_id) {
@@ -101,7 +122,7 @@ bool solver_seat_from_wagon::is_gsd_blocked(interval const& inter,
     return false;
   };
   if (check(pseudo_seats_, pseudo_ids_)) {
-    return true;
+    // return true;
   }
   return check(gsd_seats_, gsd_ids_);
 }
@@ -145,16 +166,15 @@ void solver_seat_from_wagon::print_name() const {
   std::cout << "seat assignment";
 }
 
-std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>>
-solver_seat_from_wagon::assign_seats() {
-  auto b_ids = std::vector<booking_id_t>();
-  auto s_ids = std::vector<seat_id_t>();
+void solver_seat_from_wagon::assign_seats(wagon_id_t const& w_id) {
   for (auto const& [id, b_id] : utl::enumerate(mcf_booking_ids_)) {
     for (auto seat_id = seat_id_t{0}; seat_id != total_seats_; ++seat_id) {
       auto pos = find(wagon_id_by_booking_ids_.first.begin(),
                       wagon_id_by_booking_ids_.first.end(), b_id) -
                  wagon_id_by_booking_ids_.first.begin();
-      auto w_id = train_.seat_id_to_wagon_id(seat_id);
+      if (w_id != train_.seat_id_to_wagon_id(seat_id)) {
+        continue;
+      }
       if (wagon_id_by_booking_ids_.second[pos] != w_id) {
         continue;
       }
@@ -165,12 +185,11 @@ solver_seat_from_wagon::assign_seats() {
         continue;
       }
       if (vars_[std::make_pair(b_id, seat_id)]->solution_value() == 1) {
-        b_ids.emplace_back(b_id);
-        s_ids.emplace_back(seat_id);
+        seats_by_bookings_.first.emplace_back(b_id);
+        seats_by_bookings_.second.emplace_back(seat_id);
       }
     }
   }
-  return std::make_pair(b_ids, s_ids);
 }
 
 void solver_seat_from_wagon::set_hint(
@@ -202,55 +221,15 @@ void solver_seat_from_wagon::set_hint(
   std::cout << "hint size: " << hint.size() << " sum: " << sum << "\n";
 }
 
-void solver_seat_from_wagon::create_objective() {
-  gor::MPObjective* const objective = solver_->MutableObjective();
-  auto max_group_id =
-      bookings_[std::max_element(
-                    mcf_booking_ids_.begin(), mcf_booking_ids_.end(),
-                    [&](booking_id_t const& b1, booking_id_t const& b2) {
-                      return bookings_[b1].group_id_ < bookings_[b2].group_id_;
-                    }) -
-                mcf_booking_ids_.begin()]
-          .group_id_;
-  for (auto group_id = 1; group_id != max_group_id + 1; ++group_id) {
-    for (auto const& [idx, booking] : utl::enumerate(bookings_)) {
-      if (booking.group_id_ != group_id) {
-        continue;
-      }
-      for (auto const& [idx2, booking2] : utl::enumerate(bookings_)) {
-        if (booking2.group_id_ != group_id) {
-          continue;
-        }
-        if (idx == idx2) {
-          continue;
-        }
-        auto constraint1 =
-            solver_->MakeRowConstraint(fmt::format("o_{}_{}", idx, idx2));
-        auto constraint2 =
-            solver_->MakeRowConstraint(fmt::format("o_{}_{}", idx, idx2));
-        objective_helper_vars_.emplace(
-            std::make_pair(idx, idx2),
-            solver_->MakeIntVar(-solver_->infinity(), solver_->infinity(),
-                                fmt::format("helper_{}_{}", idx, idx2)));
-        auto new_var = objective_helper_vars_.at(std::make_pair(idx, idx2));
-        constraint1->SetCoefficient(new_var, -1);
-        constraint2->SetCoefficient(new_var, -1);
-        objective->SetCoefficient(new_var, 1);
-        for (auto const& [pair, var] : vars_) {
-          auto b_id = pair.first;
-          if (b_id != idx && b_id != idx2) {
-            continue;
-          }
-          auto sign = (b_id == idx) ? 1 : -1;
-          constraint1->SetCoefficient(
-              var, sign * train_.seat_id_to_wagon_id(pair.second));
-          constraint2->SetCoefficient(
-              var, sign * train_.seat_id_to_wagon_id(pair.second));
-        }
-      }
-    }
-  }
-  print();
+void solver_seat_from_wagon::create_objective() {}
+
+void solver_seat_from_wagon::reset() {
+  solver_->Clear();
+  result_ = gor::MPSolver::INFEASIBLE;
+  vars_.clear();
+  source_constraints_.clear();
+  capacity_constraints_.clear();
+  objective_helper_vars_.clear();
 }
 
 }  // namespace seat

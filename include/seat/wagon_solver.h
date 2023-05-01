@@ -35,7 +35,7 @@ struct solver_wagon {
                                              reservation const&);
   void set_hint(std::vector<wagon_id_t> const&);
   std::pair<std::vector<booking_id_t>, std::vector<wagon_id_t>> assign_seats();
-  void create_mcf_problem();
+  void create_mcf_problem(train&);
   void create_objective(wagon_id_t const&);
   int print_helpers(bool const);
   void reset();

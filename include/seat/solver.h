@@ -38,6 +38,9 @@ struct solver {
   void print_sizes() const;
   void print_name() const;
 
+  void get_actual_booking_ids_from_amount(
+      std::vector<std::pair<booking, int>> const&, std::vector<booking_id_t>&,
+      reservation const&, std::vector<seat_id_t> const&) const;
   gor::MPVariable* get_path_var(booking const& b_id, reservation const& c_res);
   gor::MPConstraint* get_source_constraint(booking const&);
   gor::MPConstraint* get_capacity_constraint(small_station_id_t const,
@@ -62,10 +65,10 @@ struct solver {
   // ids of such bookings
   std::vector<booking_id_t> gsd_bookings_;
 
-  // When a gsd-booking is asigned a fixed seat, the seat and the booking are no
-  // longer considered in the mcf, use pseudo-gsd-bookings to fill this seat on
-  // segments that aren't blocked by this gsd-booking, these bookings are called
-  // pseudo-gsd-bookings
+  // When a gsd-booking is asigned a fixed seat, the seat and the booking are
+  // no longer considered in the mcf, use pseudo-gsd-bookings to fill this
+  // seat on segments that aren't blocked by this gsd-booking, these bookings
+  // are called pseudo-gsd-bookings
   std::vector<booking_id_t> pseudo_gsd_bookings_;
   // holds the seats for every (pseudo)gsd-booking
   std::vector<seat_id_t> gsd_seats_;

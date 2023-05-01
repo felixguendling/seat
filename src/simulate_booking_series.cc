@@ -37,9 +37,9 @@ void simulation::simulate() {
     }
   }
   print_valid_times();
-
+  solver_->solve();
+  // solver_->release_pseudo(train_.get_seat_attributes());
   auto hint = solver_->place_bookings_in_arbitrary_valid_wagons(train_);
-  solver_->release_pseudo(train_.get_seat_attributes());
   auto wagon_ids_by_booking_ids = assign_to_wagons(hint);
   print_wagon_assignment_results(wagon_ids_by_booking_ids);
 
@@ -50,68 +50,26 @@ void simulation::simulate() {
       solver_->concrete_bookings_, solver_->pseudo_gsd_bookings_,
       solver_->gsd_bookings_, solver_->pseudo_gsd_seats_, solver_->gsd_seats_,
       train_.last_seat_id_, train_);
-  seats_from_wagon_solver.create_mcf_problem();
   // seats_from_wagon_solver.set_hint(wagon_ids_by_booking_ids);
   UTL_START_TIMING(wagon_to_seat);
   seats_from_wagon_solver.solve();
   auto const wagon_to_seat_t = UTL_GET_TIMING_MS(wagon_to_seat);
-  seats_from_wagon_solver.assign_seats();
   //***
 
-  // old seat assignment ****
-  auto seat_solver = solver_seat(
-      specifics_.number_of_segments_, train_.get_seat_attributes(),
-      solver_->bookings_, solver_->mcf_bookings_, solver_->concrete_bookings_,
-      solver_->pseudo_gsd_bookings_, solver_->gsd_bookings_,
-      solver_->pseudo_gsd_seats_, solver_->gsd_seats_, train_.last_seat_id_);
-  seat_solver.create_mcf_problem();
-  seat_solver.set_hint(
-      solver_->place_bookings_on_arbitrary_valid_seats(train_));
-  UTL_START_TIMING(seat_assign_time);
-  auto feasible = seat_solver.solve();
-  auto const t = UTL_GET_TIMING_MS(seat_assign_time);
-  //****
-
   UTL_START_TIMING(prep_time);
-  auto b_ids = std::vector<booking_id_t>();
-  auto s_ids = std::vector<seat_id_t>();
-  for (auto const& [id, b_id] : utl::enumerate(seat_solver.mcf_booking_ids_)) {
-    for (auto seat_id = seat_id_t{0}; seat_id != seat_solver.total_seats_;
-         ++seat_id) {
-      if (!matches(seat_solver.bookings_[b_id].r_,
-                   seat_solver.seat_attributes_[seat_id].second)) {
-        continue;
-      }
-      if (seat_solver.is_gsd_blocked(seat_solver.bookings_[b_id].interval_,
-                                     seat_id)) {
-        continue;
-      }
-      if (seat_solver.vars_[std::make_pair(b_id, seat_id)]->solution_value() ==
-          1) {
-        b_ids.emplace_back(b_id);
-        s_ids.emplace_back(seat_id);
-      }
-    }
-  }
-  std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>> assignment =
-      std::make_pair(b_ids, s_ids);
   auto const prep_t = UTL_GET_TIMING_MS(prep_time);
   std::cout << "prep time: " << prep_t << "\n";
   std::cout << "_________________________________________________\n";
-  seat_solver.print_name();
+  seats_from_wagon_solver.print_name();
   std::cout << "\n";
-  seat_solver.print_sizes();
-  std::cout << " wagon to seat: " << wagon_to_seat_t << ", seats " << t;
+  seats_from_wagon_solver.print_sizes();
+  std::cout << " wagon to seat: " << wagon_to_seat_t << ", seats "
+            << wagon_to_seat_t;
   std::cout << "\n";
   std::cout << "\n";
-  train_.print(specifics_.number_of_segments_, assignment.first,
-               solver_->gsd_bookings_, solver_->pseudo_gsd_bookings_,
-               assignment.second, solver_->gsd_seats_,
-               solver_->pseudo_gsd_seats_, solver_->bookings_);
-  if (!feasible) {
-    abort();
-  }
-  std::cout << "seat assignment is " << (feasible ? "" : "in") << "feasible\n";
+  train_.print2(specifics_.number_of_segments_, solver_->bookings_,
+                seats_from_wagon_solver.seats_by_bookings_,
+                solver_->gsd_bookings_, solver_->gsd_seats_);
   reset();
 }
 
@@ -236,7 +194,7 @@ void simulation::add_group_booking() {
 std::pair<std::vector<booking_id_t>, std::vector<wagon_id_t>>
 simulation::assign_to_wagons(std::vector<wagon_id_t> const& hint) {
   auto wagon_res_capacities =
-      train_.get_wagon_res_capacities(std::vector<seat_id_t>()); /*
+      train_.get_wagon_res_capacities(std::vector<booking_id_t>()); /*
    auto errors = std::vector<int>();
    auto times = std::vector<int>();
    errors.resize(specifics_.timed_wagon_runs_);
@@ -273,11 +231,11 @@ simulation::assign_to_wagons(std::vector<wagon_id_t> const& hint) {
       solver_->mcf_bookings_, solver_->concrete_bookings_,
       solver_->pseudo_gsd_bookings_, solver_->gsd_bookings_,
       solver_->pseudo_gsd_seats_, solver_->gsd_seats_);
-  wagon_solver.create_mcf_problem();
+  wagon_solver.create_mcf_problem(train_);
   wagon_solver.set_hint(hint);
   wagon_solver.create_objective(train_.train_.size());
   UTL_START_TIMING(wagon_assign_time);
-  wagon_solver.solve(10);
+  wagon_solver.solve(4);
   auto const t_wagon = UTL_GET_TIMING_MS(wagon_assign_time);
   std::cout << "----------\n";
   std::cout << "time spend wagon: " << t_wagon << "\n";

@@ -40,6 +40,10 @@ struct wagon {
              std::vector<booking_id_t> const&, std::vector<booking_id_t> const&,
              std::vector<seat_id_t> const&, std::vector<seat_id_t> const&,
              std::vector<seat_id_t> const&, std::vector<booking> const&) const;
+  void print2(
+      small_station_id_t const, std::vector<booking> const&,
+      std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>> const&,
+      std::vector<booking_id_t> const&, std::vector<seat_id_t> const&) const;
   int roll_wagon_size(int const&, int const&);
   void get_number_of_seats(std::map<reservation, std::uint32_t>& seats) const;
   void get_seat_attributes(
@@ -78,6 +82,10 @@ struct train {
   std::map<std::pair<wagon_id_t, reservation>, uint32_t>
   get_wagon_res_capacities(std::vector<seat_id_t> const&);
   wagon_id_t seat_id_to_wagon_id(seat_id_t const&);
+  void print2(
+      small_station_id_t const, std::vector<booking> const&,
+      std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>> const&,
+      std::vector<booking_id_t> const&, std::vector<seat_id_t> const&) const;
 
   seat_id_t last_seat_id_;
   wagon_id_t last_wagon_id_;

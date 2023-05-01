@@ -11,31 +11,25 @@ interval_graph::interval_graph(std::vector<booking> const& bookings)
 
 void interval_graph::create_graph(std::vector<booking_id_t> const& b_ids) {
   b_ids_ = b_ids;
-  neighbours_.resize(b_ids_.size());
   if (b_ids_.size() == 0) {
     return;
   }
+  neighbours_.resize(b_ids_.size());
   for (auto const& [idx, b_id] : utl::enumerate(b_ids_)) {
-    auto in1 = all_bookings_[b_id].interval_;
+    auto interv1 = all_bookings_[b_id].interval_;
     neighbours_[idx] = std::vector<int>();
     for (auto const& [idx2, b_id2] : utl::enumerate(b_ids_)) {
       if (idx == idx2) {
         continue;
       }
-      auto in2 = all_bookings_[b_id2].interval_;
+      auto interv2 = all_bookings_[b_id2].interval_;
       // check overlap
-      if ((in1.from_ >= in2.from_ && in2.to_ > in1.from_) ||
-          (in2.from_ >= in1.from_ && in1.to_ > in2.from_)) {
+      if ((interv1.from_ >= interv2.from_ && interv2.to_ > interv1.from_) ||
+          (interv2.from_ >= interv1.from_ && interv1.to_ > interv2.from_) ||
+          (idx >= b_ids.size() && idx2 >= b_ids.size())) {
         neighbours_[idx].emplace_back(idx2);
       }
     }
-  }
-  distribute_bookings();
-}
-
-void interval_graph::distribute_bookings() {
-  if (b_ids_.size() == 0) {
-    return;
   }
   seats_by_booking_id_.resize(b_ids_.size());
   fill(seats_by_booking_id_.begin(), seats_by_booking_id_.end(),
@@ -72,20 +66,21 @@ void interval_graph::distribute_bookings() {
     }
     todos.emplace_back(min_idx);
     while (!todos.empty()) {
+      auto current_todo = todos[0];
       for (auto const& [idx, block] : utl::enumerate(blocked)) {
-        if (block > all_bookings_[b_ids_[todos[0]]].interval_.from_) {
+        if (block > all_bookings_[b_ids_[current_todo]].interval_.from_) {
           continue;
         }
-        blocked[idx] = all_bookings_[b_ids_[todos[0]]].interval_.to_;
-        seats_by_booking_id_[todos[0]] = idx;
-        for (auto const& neighbour : neighbours_[todos[0]]) {
+        blocked[idx] = all_bookings_[b_ids_[current_todo]].interval_.to_;
+        seats_by_booking_id_[current_todo] = idx;
+        for (auto const& neighbour : neighbours_[current_todo]) {
           if (find(begin(todos), end(todos), neighbour) != end(todos) ||
               find(done.begin(), done.end(), neighbour) != done.end()) {
             continue;
           }
           todos.emplace_back(neighbour);
         }
-        done.emplace_back(todos[0]);
+        done.emplace_back(current_todo);
         todos.erase(todos.begin());
 
         std::sort(todos.begin(), todos.end(),

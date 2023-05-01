@@ -7,7 +7,6 @@
 namespace seat {
 struct interval_graph {
   explicit interval_graph(std::vector<booking> const&);
-  void distribute_bookings();
   void create_graph(std::vector<booking_id_t> const&);
   void reset();
 
