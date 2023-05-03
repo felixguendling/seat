@@ -7,6 +7,10 @@
 
 #include "ortools/linear_solver/linear_solver.h"
 
+#include "fmt/format.h"
+
+#include "utl/get_or_create.h"
+
 #include "seat/booking.h"
 #include "seat/reservation.h"
 #include "seat/train.h"
@@ -41,9 +45,30 @@ struct solver_seat_from_wagon {
   gor::MPConstraint* get_capacity_constraint(
       seat_id_t const& seat_id, small_station_id_t const station_id);
   void create_mcf_problem(wagon_id_t const&);
-  void create_objective();
+  void create_objective(wagon_id_t const);
   bool is_gsd_blocked(interval const&, seat_id_t const);
   void reset();
+
+  template <class T, typename F>
+  void create_obj_constraints(
+      std::map<std::pair<group_id_t, T>, gor::MPConstraint*>& constraints,
+      F&& f) {
+    for (auto const& [key, var] : vars_) {
+      auto const b_id = key.first;
+      auto s_id = key.second;
+      auto const group_id = bookings_[b_id].group_id_;
+      if (group_id == 0) {
+        continue;
+      }
+      T filtered = f(s_id);
+      auto constraint = utl::get_or_create(
+          constraints, std::make_pair(group_id, filtered), [&]() {
+            return solver_->MakeRowConstraint(
+                fmt::format("s_{}_{}", group_id, s_id));
+          });
+      constraint->SetCoefficient(var, 1);
+    }
+  }
 
   operations_research::MPSolver* solver_;
   operations_research::MPSolver::ResultStatus result_ =
@@ -67,10 +92,15 @@ struct solver_seat_from_wagon {
   std::map<booking_id_t, gor::MPConstraint*> source_constraints_;
   std::map<std::pair<seat_id_t, small_station_id_t>, gor::MPConstraint*>
       capacity_constraints_;
-  std::map<std::pair<booking_id_t, booking_id_t>, gor::MPVariable*>
-      objective_helper_vars_;
   std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>>
       seats_by_bookings_;
+  std::map<std::pair<group_id_t, row_id_t>, gor::MPConstraint*>
+      row_constraints_;
+  std::map<std::pair<group_id_t, bool>, gor::MPConstraint*> lr_constraints_;
+  std::map<std::pair<group_id_t, bool>, gor::MPConstraint*>
+      corridor_constraints_;
+  std::map<std::pair<group_id_t, bool>, gor::MPConstraint*> table_constraints_;
+  std::map<std::pair<group_id_t, bool>, gor::MPConstraint*> big_constraints_;
 };
 
 }  // namespace seat

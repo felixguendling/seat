@@ -4,9 +4,14 @@
 #include <vector>
 
 #include "utl/enumerate.h"
+#include "utl/parser/buf_reader.h"
+#include "utl/parser/csv_range.h"
+#include "utl/parser/line_range.h"
+#include "utl/pipes/for_each.h"
 #include "utl/timing.h"
 #include "utl/verify.h"
 
+#include "cista/mmap.h"
 #include "seat/booking.h"
 #include "seat/random_booking.h"
 #include "seat/reservation.h"
@@ -36,6 +41,7 @@ void simulation::simulate() {
       add_normal_booking();
     }
   }
+  write_before_wagon_assignment();
   print_valid_times();
   solver_->solve();
   // solver_->release_pseudo(train_.get_seat_attributes());
@@ -75,13 +81,14 @@ void simulation::simulate() {
 
 void simulation::add_normal_booking() {
   normal_counter_++;
-  auto const b =
+  auto b =
       generate_random_booking(seats_by_res_, train_.get_possible_reservations(),
                               specifics_.number_of_segments_);
+  b.type_ = booking_type::NORMAL;
   std::cout << "booking: #" << success_ << " " << b << " - ";
   auto feasible = !nogo.is_nogo(b);
   if (feasible) {
-    booking_type_.emplace_back(NORMAL);
+    booking_type_.emplace_back(booking_type::NORMAL);
     solver_->add_booking(b);
     UTL_START_TIMING(ilp);
     feasible = solver_->solve();
@@ -115,6 +122,7 @@ void simulation::add_gsd_booking() {
   assert(to < specifics_.number_of_segments_);
   std::cout << "gsd: #" << success_ << " " << interv << " - ";
   booking b_gsd;
+  b_gsd.type_ = booking_type::GSD;
   b_gsd.interval_ = interv;
   b_gsd.r_ = reservation();
   auto feasible = !gsd_nogo.is_nogo(b_gsd);
@@ -124,7 +132,7 @@ void simulation::add_gsd_booking() {
               << "\n";
     return;
   }
-  booking_type_.emplace_back(GSD);
+  booking_type_.emplace_back(booking_type::GSD);
   UTL_START_TIMING(gsd);
   std::vector<reservation> available_reservations =
       solver_->gsd_request(interv);
@@ -154,6 +162,7 @@ void simulation::add_group_booking() {
   auto b =
       generate_random_booking(seats_by_res_, train_.get_possible_reservations(),
                               specifics_.number_of_segments_);
+  b.type_ = booking_type::GROUP;
   uint8_t g_s1 = (rand() % specifics_.max_group_size_);
   uint8_t g_s2 = (rand() % specifics_.max_group_size_);
   uint8_t group_size = (g_s1 > g_s2) ? (g_s2 + 2) : (g_s1 + 2);
@@ -163,7 +172,7 @@ void simulation::add_group_booking() {
             << " with id " << +b.group_id_ << " " << b << " - ";
   auto feasible = !nogo.is_nogo(b);
   if (feasible) {
-    booking_type_.emplace_back(NORMAL);
+    booking_type_.emplace_back(booking_type::GROUP);
     for (auto i = 0; i != group_size; ++i) {
       solver_->add_booking(b);
     }
@@ -234,6 +243,7 @@ simulation::assign_to_wagons(std::vector<wagon_id_t> const& hint) {
   wagon_solver.create_mcf_problem(train_);
   wagon_solver.set_hint(hint);
   wagon_solver.create_objective(train_.train_.size());
+  wagon_solver.print();
   UTL_START_TIMING(wagon_assign_time);
   wagon_solver.solve(4);
   auto const t_wagon = UTL_GET_TIMING_MS(wagon_assign_time);
@@ -261,7 +271,7 @@ void simulation::print_valid_times() {
 
   for (auto j = 0; j != timings_vec_.size(); ++j) {
     sum += timings_vec_[j];
-    if (booking_type_[j] == GSD) {
+    if (booking_type_[j] == booking_type::GSD) {
       sum_gsd += timings_vec_[j];
     } else {
       sum_non_gsd += timings_vec_[j];
@@ -346,7 +356,7 @@ void simulation::reset() {
   nogo.clear();
   gsd_nogo.clear();
   group_nogo.clear();
-  failed_ = 1200;
+  failed_ = 420;
   i_ = 0U;
   success_ = 0U;
   timings_vec_.clear();
@@ -355,4 +365,35 @@ void simulation::reset() {
   normal_counter_ = 0;
   group_counter_ = 0;
   last_group_id_ = 1;
+}
+
+void simulation::write_before_wagon_assignment() {
+  auto const file_name = "before_wagons.csv";
+  auto f = std::ofstream{file_name};
+  f << "from;to;reservation;type;group_size;group_id";
+  for (auto const& b : solver_->bookings_) {
+    f << b.interval_.from_ << ";" << b.interval_.to_ << ";" << b.r_ << ";"
+      << b.type_ << ";" << b.group_size_ << ";" << b.group_id_ << "\n";
+  }
+}
+
+void simulation::read_bookings(std::string const& file_name) {
+  struct entry {
+    utl::csv_col<small_station_id_t, UTL_NAME("from")> from_;
+    utl::csv_col<small_station_id_t, UTL_NAME("to")> to_;
+    utl::csv_col<utl::cstr, UTL_NAME("reservation")> r_;
+    utl::csv_col<utl::cstr, UTL_NAME("type")> type_;
+    utl::csv_col<uint8_t, UTL_NAME("group_size")> g_size_;
+    utl::csv_col<group_id_t, UTL_NAME("group_id")> g_id_;
+  };
+  auto m = cista::mmap{file_name.c_str(), cista::mmap::protection::READ};
+
+  utl::line_range{utl::buf_reader{m.view()}}  //
+      | utl::csv<entry>()  //
+      | utl::for_each([&](entry const& e) {
+          booking b;
+          b.interval_ = interval{e.from_.val(), e.to_.val()};
+          b.group_id_ = e.g_id_.val();
+          b.group_size_ = e.g_size_.val();
+        });
 }

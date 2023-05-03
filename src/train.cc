@@ -272,7 +272,6 @@ void wagon::print2(small_station_id_t const segment,
       if (s_id != mcf_s_id) {
         continue;
       }
-      auto bla = b_ids[id];
       auto b = bookings[b_ids[id]];
       if (b.interval_.from_ <= segment && b.interval_.to_ > segment) {
         if (b.group_id_ != 0) {
@@ -382,6 +381,8 @@ void train::print2(small_station_id_t const last_station,
                              std::vector<seat_id_t>> const& normal_bookings,
                    std::vector<booking_id_t> const& gsd,
                    std::vector<seat_id_t> const& gsd_seats) const {
+  HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+  SetConsoleTextAttribute(hConsole, default_color_);
   std::cout << "_____________________printing train_______________________\n";
   for (auto station = station_id_t{0}; station != last_station; ++station) {
     std::cout << "___________________segment: " << station
@@ -392,13 +393,13 @@ void train::print2(small_station_id_t const last_station,
     }
   }
 
-  HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
   SetConsoleTextAttribute(hConsole, default_color_);
   std::cout << "\ndefault";
   SetConsoleTextAttribute(hConsole, gsd_color_);
   std::cout << "\ngsd";
   SetConsoleTextAttribute(hConsole, pseudo_color_);
   std::cout << "\npseudo";
+  SetConsoleTextAttribute(hConsole, default_color_);
 }
 
 void seat_cluster::get_seat_attributes(
@@ -595,6 +596,55 @@ wagon_id_t train::seat_id_to_wagon_id(seat_id_t const& s_id) {
         }
       });
   return w;
+}
+
+row_id_t train::seat_id_to_row_id(seat_id_t const& s_id,
+                                  wagon_id_t const& w_id) {
+  auto c = [](std::vector<std::vector<seat_id_t>> const& sc,
+              seat_id_t const& s_id) {
+    for (auto const& seats : sc) {
+      for (auto const& s : seats) {
+        if (s == s_id) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  for (auto const& [row_idx, sc] :
+       utl::enumerate(train_.at(w_id).seat_clusters_)) {
+    if (c(sc.window_seats_, s_id) || c(sc.corridor_seats_, s_id)) {
+      return row_idx;
+    }
+  }
+}
+
+bool train::seat_id_to_lr(seat_id_t const& s_id, wagon_id_t const& w_id) {
+  enum state { NOT_FOUND, LEFT, RIGHT };
+  auto c = [](std::vector<std::vector<seat_id_t>> const& sc,
+              seat_id_t const& s_id) -> state {
+    for (auto const& seats : sc) {
+      for (auto const& [idx, s] : utl::enumerate(seats)) {
+        if (s != s_id) {
+          continue;
+        }
+        return (idx == 0) ? LEFT : RIGHT;
+      }
+    }
+    return NOT_FOUND;
+  };
+  state result;
+  for (auto const& sc : train_.at(w_id).seat_clusters_) {
+    result = c(sc.window_seats_, s_id);
+    if (result != NOT_FOUND) {
+      return result == LEFT;
+    }
+    result = c(sc.corridor_seats_, s_id);
+    if (result != NOT_FOUND) {
+      return result == LEFT;
+    }
+  }
+  abort();
 }
 
 }  // namespace seat

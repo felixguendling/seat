@@ -31,6 +31,8 @@ struct simulation {
   void print_wagon_assignment_results(
       std::pair<std::vector<booking_id_t>, std::vector<wagon_id_t>> const&)
       const;
+  void write_before_wagon_assignment();
+  void read_bookings(std::string const& file_name);
 
   std::map<reservation, std::uint32_t> seats_by_res_;
   solver* solver_;
@@ -48,7 +50,7 @@ struct simulation {
   int success_ = 0U;
 
   std::vector<std::uint64_t> timings_vec_;
-  std::vector<BOOKING_TYPE> booking_type_;
+  std::vector<booking_type> booking_type_;
   int gsd_counter_ = 0;
   int normal_counter_ = 0;
   int group_counter_ = 0;

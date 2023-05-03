@@ -51,7 +51,6 @@ struct solver_wagon {
   std::vector<seat_id_t> pseudo_seats_;
   std::vector<seat_id_t> gsd_seats_;
   std::vector<booking_id_t> gsd_ids_;
-  std::vector<booking_id_t> pseudo_ids_;
 
   std::map<std::pair<std::pair<booking_id_t, wagon_id_t>, reservation>,
            gor::MPVariable*>

@@ -17,7 +17,8 @@ struct booking {
   reservation r_;
   interval interval_;
   group_id_t group_id_ = 0;  // 0 -> no group
-  uint8_t group_size_;
+  uint8_t group_size_ = 0;
+  booking_type type_;
 };
 
 }  // namespace seat

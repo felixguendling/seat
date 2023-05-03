@@ -26,12 +26,11 @@ solver_wagon::solver_wagon(uint32_t const& num_seg,
       gsd_seats_(gsd_seats),
       mcf_booking_ids_(mcf_ids),
       gsd_ids_(gsd_ids),
-      pseudo_ids_(pseudo_ids),
       wagon_res_capacities_(wagon_res_capacities) {
   for (auto const& id : concrete_ids) {
     mcf_booking_ids_.emplace_back(id);
   }
-  for (auto const& id : pseudo_ids_) {
+  for (auto const& id : pseudo_ids) {
     mcf_booking_ids_.emplace_back(id);
   }
 }
@@ -75,9 +74,13 @@ void solver_wagon::create_mcf_problem(train& t) {
   for (auto const& [idx, gsd_seat] : utl::enumerate(gsd_seats_)) {
     auto interv = bookings_[gsd_ids_[idx]].interval_;
     for (auto i = interv.from_; i != interv.to_; ++i) {
-      auto constraint = capacity_constraints_[std::make_pair(
-          bookings_[gsd_ids_[idx]].r_,
-          std::make_pair(t.seat_id_to_wagon_id(gsd_seat), i))];
+      auto key =
+          std::make_pair(bookings_[gsd_ids_[idx]].r_,
+                         std::make_pair(t.seat_id_to_wagon_id(gsd_seat), i));
+      if (capacity_constraints_.find(key) == capacity_constraints_.end()) {
+        continue;
+      }
+      auto constraint = capacity_constraints_[key];
       constraint->SetBounds(0, constraint->ub() - 1);
     }
   }
@@ -251,6 +254,7 @@ void solver_wagon::set_hint(
 
 int solver_wagon::print_helpers(bool const print) {
   auto error_counter = 0;
+  this->print();
   for (auto const& [id, v] : objective_max_helper_vars_) {
     if (objective_max_helper_vars_[id]->solution_value() -
             objective_min_helper_vars_[id]->solution_value() >
@@ -280,7 +284,6 @@ void solver_wagon::reset() {
   pseudo_seats_.clear();
   gsd_seats_.clear();
   gsd_ids_.clear();
-  pseudo_ids_.clear();
   vars_.clear();
   source_constraints_.clear();
   capacity_constraints_.clear();
@@ -288,6 +291,7 @@ void solver_wagon::reset() {
   objective_min_helper_vars_.clear();
   objective_abs_helper_vars_.clear();
 }
+
 bool solver_wagon::solve(int i) {
   solver_->SetTimeLimit(absl::Minutes(i));
   return solve();

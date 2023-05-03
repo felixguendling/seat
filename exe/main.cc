@@ -7,7 +7,7 @@ using namespace seat;
 
 int main() {
   auto specifics = simulation_specifics();
-  specifics.number_of_segments_ = 3U;
+  specifics.number_of_segments_ = 2U;
   specifics.gsd_prob_ = 0.2;
   specifics.group_prob_ = 0.1;
   specifics.max_group_size_ = 5;
@@ -15,15 +15,15 @@ int main() {
 
   // specifics.output_options_.do_output_ = false;
 
-  auto seat_amount = 40;
+  auto seat_amount = 5;
   for (auto j = seat_amount; j != seat_amount + 1; j++) {
-    for (auto i = 2; i != 3; ++i) {
+    for (auto i = 34; i != 133; ++i) {
       srand(i);
       std::cout << "srand: " << i << "\n";
       auto t = train();
       auto total_seats = j;
       auto min_wagon_size = j / 2 + 1;
-      auto max_wagon_size = 80;
+      auto max_wagon_size = 1;
       min_wagon_size = max_wagon_size;
       t.generate_random_train(total_seats, 0.5, 0.3, 0.2, max_wagon_size,
                               min_wagon_size);

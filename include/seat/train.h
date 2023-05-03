@@ -82,6 +82,8 @@ struct train {
   std::map<std::pair<wagon_id_t, reservation>, uint32_t>
   get_wagon_res_capacities(std::vector<seat_id_t> const&);
   wagon_id_t seat_id_to_wagon_id(seat_id_t const&);
+  row_id_t seat_id_to_row_id(seat_id_t const&, wagon_id_t const&);
+  bool seat_id_to_lr(seat_id_t const&, wagon_id_t const&);
   void print2(
       small_station_id_t const, std::vector<booking> const&,
       std::pair<std::vector<booking_id_t>, std::vector<seat_id_t>> const&,

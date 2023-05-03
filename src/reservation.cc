@@ -1,9 +1,7 @@
 #include "seat/reservation.h"
 
-#include <math.h>
 #include <cassert>
 #include <algorithm>
-#include <iostream>
 
 #include "utl/enumerate.h"
 #include "utl/zip.h"

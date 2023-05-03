@@ -1,19 +1,19 @@
 #pragma once
 
+#include <cstdint>
+#include <iosfwd>
+
 namespace seat {
 
-enum FEASIBLE { FEASIBLE, INFEASIBLE, UNKNOWN };
-enum BOOKING_TYPE { NORMAL, GSD, GROUP };
+enum class booking_type { NORMAL, GSD, GROUP };
+std::ostream& operator<<(std::ostream& out, booking_type const& type);
 using station_id_t = std::uint32_t;
-using node_id_t = std::uint32_t;
-using path_id_t = std::uint32_t;
-using capacity_t = std::uint32_t;
-using color_t = std::uint16_t;
 using booking_id_t = std::uint32_t;
 using encoded_reservation_t = std::uint8_t;
 using small_station_id_t = std::uint8_t;
 using wagon_id_t = std::uint8_t;
-using seat_id_t = uint32_t;
-using group_id_t = uint32_t;
+using seat_id_t = std::uint32_t;
+using group_id_t = std::uint32_t;
+using row_id_t = std::uint32_t;
 
 }  // namespace seat

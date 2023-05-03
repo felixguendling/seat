@@ -57,6 +57,7 @@ void solver_seat_from_wagon::solve() {
   for (auto i = wagon_id_t{0}; i != max_wagon_id + 1; ++i) {
     reset();
     create_mcf_problem(i);
+    create_objective(i);
     result_ = solver_->Solve();
     assign_seats(i);
     if (!feasible()) {
@@ -184,7 +185,11 @@ void solver_seat_from_wagon::assign_seats(wagon_id_t const& w_id) {
       if (is_gsd_blocked(bookings_[b_id].interval_, seat_id)) {
         continue;
       }
-      if (vars_[std::make_pair(b_id, seat_id)]->solution_value() == 1) {
+      auto key = std::make_pair(b_id, seat_id);
+      if (vars_.find(key) == end(vars_)) {
+        continue;
+      }
+      if (vars_[key]->solution_value() == 1) {
         seats_by_bookings_.first.emplace_back(b_id);
         seats_by_bookings_.second.emplace_back(seat_id);
       }
@@ -221,15 +226,37 @@ void solver_seat_from_wagon::set_hint(
   std::cout << "hint size: " << hint.size() << " sum: " << sum << "\n";
 }
 
-void solver_seat_from_wagon::create_objective() {}
-
 void solver_seat_from_wagon::reset() {
   solver_->Clear();
   result_ = gor::MPSolver::INFEASIBLE;
   vars_.clear();
   source_constraints_.clear();
   capacity_constraints_.clear();
-  objective_helper_vars_.clear();
+  row_constraints_.clear();
 }
+
+void solver_seat_from_wagon::create_objective(wagon_id_t const w_id) { /*
+   create_obj_constraints(row_constraints_, [&](seat_id_t const& s_id) {
+     return train_.seat_id_to_row_id(s_id, w_id);
+   });
+   create_obj_constraints(lr_constraints_, [&](seat_id_t const& s_id) {
+     return train_.seat_id_to_lr(s_id, w_id);
+   });
+   create_obj_constraints(corridor_constraints_, [&](seat_id_t const& s_id) {
+     return seat_attributes_[s_id].second[0] == wish::kNo;
+   });
+   create_obj_constraints(big_constraints_, [&](seat_id_t const& s_id) {
+     return seat_attributes_[s_id].second[3] == wish::kYes;
+   });*/
+}
+/*
+gor::MPConstraint* solver_seat_from_wagon::get_constraint(
+    group_id_t const group_id, booking_id_t const& b_id, wagon_id_t const
+w_id, std::map<std::pair<group_id_t, row_id_t>, gor::MPConstraint*> const&, )
+{ return utl::get_or_create( row_constraints_, std::make_pair(group_id,
+train_.seat_id_to_row_id(b_id, w_id)),
+      [&]() { return solver_->MakeRowConstraint(fmt::format("s_{}", b_id));
+});
+}*/
 
 }  // namespace seat

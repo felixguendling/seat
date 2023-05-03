@@ -303,10 +303,12 @@ void solver::add_gsd_booking(booking const& gsd_booking,
                          [&](booking b) { return b == pair.first; });
     } while (counter > 0);
   }*/
-  for (auto const& [id, pair] : utl::enumerate(sorted_bookings)) {
+  for (auto const& pair : sorted_bookings) {
     auto interv = pair.first.interval_;
-    if (interv.from_ > gsd_booking.interval_.to_ &&
-        gsd_booking.interval_.from_ > interv.to_) {
+    if ((interv.from_ >= gsd_booking.interval_.from_ &&
+         interv.from_ < gsd_booking.interval_.to_) ||
+        (gsd_booking.interval_.from_ >= interv.from_ &&
+         gsd_booking.interval_.from_ < interv.to_)) {
       continue;
     }
     auto counter = pair.second;

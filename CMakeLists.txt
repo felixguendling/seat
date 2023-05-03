@@ -5,7 +5,7 @@ set(BUILD_DEPS ON)
 include(cmake/pkg.cmake)
 
 file(GLOB_RECURSE seat-src-files src/*.cc)
-add_library(seatl ${seat-src-files} src/pseudo_gsd_chooser.cc src/verify_booking_assignment.cc src/interval_graph.cc src/wagon_solver.cc src/seat_from_wagon_assignment.cc)
+add_library(seatl ${seat-src-files} src/pseudo_gsd_chooser.cc src/verify_booking_assignment.cc src/interval_graph.cc src/wagon_solver.cc src/seat_from_wagon_assignment.cc src/types.cc)
 target_link_libraries(seatl PUBLIC utl cista ortools::ortools)
 target_compile_features(seatl PUBLIC cxx_std_20)
 target_include_directories(seatl PUBLIC include)
