@@ -17,8 +17,7 @@ struct solver_wagon {
       std::map<std::pair<wagon_id_t, reservation>, uint32_t> const&,
       std::vector<booking> const&, std::vector<booking_id_t> const&,
       std::vector<booking_id_t> const&, std::vector<booking_id_t> const&,
-      std::vector<booking_id_t> const&, std::vector<seat_id_t> const&,
-      std::vector<seat_id_t> const&);
+      std::vector<booking_id_t> const&, std::vector<seat_id_t> const&);
   bool solve();
   bool solve(int);
   bool feasible() const;
@@ -48,7 +47,6 @@ struct solver_wagon {
   std::vector<booking_id_t> mcf_booking_ids_;
   std::vector<booking> bookings_;
   uint32_t number_of_segments_;
-  std::vector<seat_id_t> pseudo_seats_;
   std::vector<seat_id_t> gsd_seats_;
   std::vector<booking_id_t> gsd_ids_;
 

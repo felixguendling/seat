@@ -305,10 +305,7 @@ void solver::add_gsd_booking(booking const& gsd_booking,
   }*/
   for (auto const& pair : sorted_bookings) {
     auto interv = pair.first.interval_;
-    if ((interv.from_ >= gsd_booking.interval_.from_ &&
-         interv.from_ < gsd_booking.interval_.to_) ||
-        (gsd_booking.interval_.from_ >= interv.from_ &&
-         gsd_booking.interval_.from_ < interv.to_)) {
+    if (interv.touches(gsd_booking.interval_)) {
       continue;
     }
     auto counter = pair.second;
@@ -324,7 +321,7 @@ void solver::add_gsd_booking(booking const& gsd_booking,
   }
 
   for (auto const& id : concrete_bookings_) {
-    if (bookings_[id].interval_.overlaps(gsd_booking.interval_)) {
+    if (bookings_[id].interval_.touches(gsd_booking.interval_)) {
       continue;
     }
     if (!matches(bookings_[id].r_, gsd_booking.r_)) {
@@ -373,7 +370,7 @@ std::vector<small_station_id_t> solver::find_tight_capacities(
   auto tight_capacities = std::vector<small_station_id_t>();
   for (auto const& [constraint_key, constraint] : capacity_constraints_) {
     auto const segment = constraint_key.second;
-    if (gsd_b.interval_.from_ <= segment && gsd_b.interval_.to_ > segment) {
+    if (gsd_b.interval_.contains(segment)) {
       continue;
     }
     // check only those constraints associated with the concrete reservation
@@ -563,8 +560,7 @@ void solver::release_pseudo(
   for (auto const& [idx, gsd_id] : utl::enumerate(gsd_bookings_)) {
     reservation res = seat_attributes.at(gsd_seats_[idx]).second;
     for (auto seg = small_station_id_t{0}; seg != number_segments_; ++seg) {
-      if (bookings_[gsd_id].interval_.from_ <= seg &&
-          bookings_[gsd_id].interval_.to_ > seg) {
+      if (bookings_[gsd_id].interval_.contains(seg)) {
         capacities_.at(std::make_pair(res, seg))++;
       }
     }

@@ -21,11 +21,17 @@ bool interval::overlaps(interval const& o) const {
 }
 
 uint8_t interval::size() const { return to_ - from_; }
+
 bool interval::contains(const uint8_t& o) const {
-  return o >= from_ && o <= to_;
+  return o >= from_ && o < to_;
 }
 bool interval::equals(interval const& other) const {
   return (from_ == other.from_) && (to_ == other.to_);
+}
+
+bool interval::touches(interval const& other) const {
+  return (from_ >= other.from_ && from_ < other.to_) ||
+         (other.from_ >= from_ && other.from_ < to_);
 }
 
 }  // namespace seat

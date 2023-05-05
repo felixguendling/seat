@@ -17,12 +17,10 @@ solver_wagon::solver_wagon(uint32_t const& num_seg,
                            std::vector<booking_id_t> const& concrete_ids,
                            std::vector<booking_id_t> const& pseudo_ids,
                            std::vector<booking_id_t> const& gsd_ids,
-                           std::vector<seat_id_t> const& pseudo_seats,
                            std::vector<seat_id_t> const& gsd_seats)
     : solver_{gor::MPSolver::CreateSolver(solver_name)},
       number_of_segments_(num_seg),
       bookings_(bookings),
-      pseudo_seats_(pseudo_seats),
       gsd_seats_(gsd_seats),
       mcf_booking_ids_(mcf_ids),
       gsd_ids_(gsd_ids),
@@ -254,7 +252,6 @@ void solver_wagon::set_hint(
 
 int solver_wagon::print_helpers(bool const print) {
   auto error_counter = 0;
-  this->print();
   for (auto const& [id, v] : objective_max_helper_vars_) {
     if (objective_max_helper_vars_[id]->solution_value() -
             objective_min_helper_vars_[id]->solution_value() >
@@ -281,7 +278,6 @@ void solver_wagon::reset() {
   wagon_res_capacities_.clear();
   mcf_booking_ids_.clear();
   bookings_.clear();
-  pseudo_seats_.clear();
   gsd_seats_.clear();
   gsd_ids_.clear();
   vars_.clear();

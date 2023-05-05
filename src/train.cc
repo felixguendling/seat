@@ -203,8 +203,7 @@ void wagon::print(small_station_id_t const segment,
       if (s_id != mcf_s_id) {
         continue;
       }
-      if (bookings[b_ids[id]].interval_.from_ <= segment &&
-          bookings[b_ids[id]].interval_.to_ > segment) {
+      if (bookings[b_ids[id]].interval_.contains(segment)) {
         SetConsoleTextAttribute(hConsole, color);
         print_b_ids_equal_length(b_ids[id], false);
         SetConsoleTextAttribute(hConsole, 15);  // default color (white)
@@ -273,7 +272,7 @@ void wagon::print2(small_station_id_t const segment,
         continue;
       }
       auto b = bookings[b_ids[id]];
-      if (b.interval_.from_ <= segment && b.interval_.to_ > segment) {
+      if (b.interval_.contains(segment)) {
         if (b.group_id_ != 0) {
           color = (b.group_id_ % 250) + 3;
         }
@@ -572,13 +571,10 @@ std::vector<seat_id_t> train::get_seats(reservation const& r) {
 }
 
 std::map<std::pair<wagon_id_t, reservation>, uint32_t>
-train::get_wagon_res_capacities(std::vector<seat_id_t> const& gsd_seats) {
+train::get_wagon_res_capacities() {
   auto wagon_res_cap = std::map<std::pair<wagon_id_t, reservation>, uint32_t>();
   for_each_seat([&](seat_id_t const& seat_id, reservation const& res,
                     wagon_id_t const& w_id) {
-    if (find(gsd_seats.begin(), gsd_seats.end(), seat_id) != gsd_seats.end()) {
-      return;
-    }
     auto pair = std::make_pair(w_id, res);
     utl::get_or_create(wagon_res_cap, pair, []() { return 0; });
     wagon_res_cap[pair]++;

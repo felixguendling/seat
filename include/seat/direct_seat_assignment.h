@@ -20,22 +20,21 @@ namespace seat {
 
 namespace gor = operations_research;
 
-struct solver_seat_from_wagon {
+struct solver_seat_direct {
 
-  explicit solver_seat_from_wagon(
+  explicit solver_seat_direct(
       uint32_t const&,
-      std::pair<std::vector<booking_id_t>, std::vector<wagon_id_t>> const&,
-      std::map<seat_id_t, std::pair<wagon_id_t, reservation>> const&,
+      std::map<seat_id_t, std::pair<wagon_id_t, reservation>> const&
+          seat_attributes,
       std::vector<booking> const&, std::vector<booking_id_t> const&,
       std::vector<booking_id_t> const&, std::vector<booking_id_t> const&,
       std::vector<booking_id_t> const&, std::vector<seat_id_t> const&,
       uint32_t const&, train const&);
-  void solve();
-  void set_hint(
-      std::pair<std::vector<booking_id_t>, std::vector<wagon_id_t>> const&);
+  void solve(std::vector<seat_id_t> const&);
+  void set_hint(std::vector<seat_id_t> const&);
   bool feasible() const;
 
-  void assign_seats(wagon_id_t const&);
+  void assign_seats();
   void print() const;
   void print_sizes() const;
   void print_name() const;
@@ -44,8 +43,8 @@ struct solver_seat_from_wagon {
   gor::MPConstraint* get_source_constraint(booking_id_t const& b_id);
   gor::MPConstraint* get_capacity_constraint(
       seat_id_t const& seat_id, small_station_id_t const station_id);
-  void create_mcf_problem(wagon_id_t const&);
-  void create_objective(wagon_id_t const);
+  void create_mcf_problem();
+  void create_objective();
   bool is_gsd_blocked(interval const&, seat_id_t const);
   void reset();
 
@@ -63,8 +62,13 @@ struct solver_seat_from_wagon {
       T filtered = f(s_id);
       auto constraint = utl::get_or_create(
           constraints, std::make_pair(group_id, filtered), [&]() {
-            return solver_->MakeRowConstraint(
+            auto c = solver_->MakeRowConstraint(
                 fmt::format("s_{}_{}", group_id, s_id));
+            c->SetBounds(2000, 0);
+            row_diff_vars_[group_id] =
+                solver_->MakeBoolVar(fmt::format("x_{}", group_id));
+            c->SetCoefficient(row_diff_vars_[group_id], -1000);
+            return c;
           });
       constraint->SetCoefficient(var, 1);
     }
@@ -75,8 +79,6 @@ struct solver_seat_from_wagon {
       gor::MPSolver::INFEASIBLE;
 
   train train_;
-  std::pair<std::vector<booking_id_t>, std::vector<wagon_id_t>>
-      wagon_id_by_booking_ids_;
   std::map<seat_id_t, std::pair<wagon_id_t, reservation>> seat_attributes_;
   std::vector<booking_id_t> mcf_booking_ids_;
   std::vector<booking> bookings_;
@@ -101,6 +103,7 @@ struct solver_seat_from_wagon {
       corridor_constraints_;
   std::map<std::pair<group_id_t, bool>, gor::MPConstraint*> table_constraints_;
   std::map<std::pair<group_id_t, bool>, gor::MPConstraint*> big_constraints_;
+  std::vector<gor::MPVariable*> row_diff_vars_;
 };
 
 }  // namespace seat

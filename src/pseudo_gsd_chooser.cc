@@ -23,13 +23,13 @@ pseudo_gsd_chooser::pseudo_gsd_chooser(
   }
   // create constraints
   for (auto i = small_station_id_t{0}; i != segments; ++i) {
-    if (gsd_interval.from_ <= i && gsd_interval.to_ > i) {
+    if (gsd_interval.contains(i)) {
       continue;
     }
     auto constraint = solver_->MakeRowConstraint(fmt::format("c_{}", i));
     // set coefficients of all vars in current constraint
     for (auto const& id : b_ids_) {
-      if (bookings[id].interval_.from_ <= i && bookings[id].interval_.to_ > i) {
+      if (bookings[id].interval_.contains(i)) {
         constraint->SetCoefficient(vars_[id], 1.0);
       }
     }

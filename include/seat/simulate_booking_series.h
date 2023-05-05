@@ -20,7 +20,7 @@ struct simulation {
   explicit simulation(std::map<reservation, std::uint32_t> const&, solver*,
                       train const&, simulation_specifics const&);
 
-  void simulate();
+  std::pair<time_t, time_t> simulate();
   void add_normal_booking();
   void add_gsd_booking();
   void add_group_booking();
@@ -33,6 +33,10 @@ struct simulation {
       const;
   void write_before_wagon_assignment();
   void read_bookings(std::string const& file_name);
+  void timed_runs_wagon_assignment();
+  void final_assignment();
+  void wagon_seat_assignment();
+  void seat_assignment();
 
   std::map<reservation, std::uint32_t> seats_by_res_;
   solver* solver_;
@@ -45,7 +49,7 @@ struct simulation {
 
   std::ofstream timings_ = std::ofstream{"timings.dat"};
 
-  int failed_ = 420;
+  int failed_ = 220;
   int i_ = 0U;
   int success_ = 0U;
 
@@ -58,5 +62,7 @@ struct simulation {
   uint32_t last_group_id_ = 1;
 
   simulation_specifics specifics_;
+
+  std::pair<time_t, time_t> time_;
 };
 }  // namespace seat
